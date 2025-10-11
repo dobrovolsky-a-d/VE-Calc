@@ -1,14 +1,12 @@
 export async function parseLog(file) {
   const text = await file.text();
   const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-
-  const header = lines[0].split(/[,	;]/).map(h => h.trim().toLowerCase());
+  const header = lines[0].split(/[,\t;]/).map(h => h.trim().toLowerCase());
   const data = [];
 
   lines.slice(1).forEach(line => {
-    const parts = line.split(/[,	;]/);
+    const parts = line.split(/[,\t;]/);
     const entry = {};
-
     header.forEach((h, i) => {
       const val = parseFloat(parts[i]);
       entry[h] = isNaN(val) ? parts[i] : val;
