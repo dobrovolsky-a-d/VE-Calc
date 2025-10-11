@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VE Calculator v1.0 Lite</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <h1>VE Calculator <span class="ver">v1.0 Lite</span></h1>
+
+    <div class="instruction-box">
+      <h3>📘 Мини-инструкция</h3>
+      <p>Перед загрузкой убедись, что лог содержит следующие параметры:</p>
+      <ul>
+        <li><b>RPM</b> – обороты двигателя</li>
+        <li><b>Manifold Pressure (MAP)</b> – давление во впуске (kPa)</li>
+        <li><b>AFR Actual</b> – реальный AFR (широкополосник)</li>
+        <li><b>AFR Target</b> – целевой AFR (из ЭБУ)</li>
+        <li><b>CL/OL или TPS</b> – желательно для фильтрации точек</li>
+      </ul>
+      <p class="note">⚠️ Рекомендуется логировать в Open Loop и без отсечек. Поддерживаются файлы .CSV и .TXT.</p>
+    </div>
+
+    <div class="controls">
+      <label class="file-input">Load Log CSV
+        <input type="file" id="loadLog" accept=".csv,.txt" hidden>
+      </label>
+
+      <label class="file-input">Load VE Table
+        <input type="file" id="loadVE" accept=".csv,.xml" hidden>
+      </label>
+
+      <button id="calculate">Calculate VE</button>
+      <button id="export" disabled>Export to RomRaider XML</button>
+    </div>
+
+    <div id="output" class="tables-container">
+      <p class="placeholder">Загрузите лог и таблицу VE, затем нажмите "Calculate VE"</p>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

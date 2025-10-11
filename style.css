@@ -1,0 +1,77 @@
+body {
+  font-family: system-ui, sans-serif;
+  background: #181818;
+  color: #eaeaea;
+  margin: 0;
+  padding: 20px;
+}
+
+.app-container {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.ver {
+  font-size: 0.7em;
+  color: #888;
+}
+
+.instruction-box {
+  background: #222;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 0.9em;
+}
+
+.instruction-box ul {
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+.note {
+  color: #aaa;
+  font-style: italic;
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.file-input {
+  background: #2a2a2a;
+  padding: 10px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button {
+  background: #4a4a4a;
+  color: white;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:hover, .file-input:hover {
+  background: #666;
+}
+
+.tables-container {
+  overflow-x: auto;
+}
+
+.placeholder {
+  text-align: center;
+  color: #666;
+  margin-top: 40px;
+}
