@@ -1,7 +1,7 @@
-import { parseLog } from "./utils/parseLog.js";
-import { parseVE } from "./utils/parseVE.js";
-import { calculateVE } from "./utils/veMath.js";
-import { exportRomRaider } from "./utils/exportRomRaider.js";
+import { parseLog } from "./parseLog.js";
+import { parseVE } from "./parseVE.js";
+import { calculateVE } from "./veMath.js";
+import { exportRomRaider } from "./exportRomRaider.js";
 
 let logData = null;
 let veOld = null;
@@ -17,7 +17,7 @@ function showMessage(id, msg, color = "#ccc") {
 
 function showDebug(info) {
   const el = document.getElementById("statusDebug");
-  el.innerText = info;
+  if (el) el.innerText = info;
 }
 
 // ---------- File loaders ----------
