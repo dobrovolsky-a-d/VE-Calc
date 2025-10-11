@@ -9,7 +9,6 @@ export function calculateVE(log, veOld) {
     const afrCorr = limit(p.afrTarget / p.afrActual, 0.8, 1.2);
     const i = clamp(Math.floor(mapRange(p.map, 20, 200, 0, rows - 1)), 0, rows - 1);
     const j = clamp(Math.floor(mapRange(p.rpm, 800, 7000, 0, cols - 1)), 0, cols - 1);
-
     corrSum[i][j] += afrCorr;
     count[i][j]++;
   });
@@ -26,12 +25,7 @@ export function calculateVE(log, veOld) {
   }
 
   const veSmooth = smoothMatrix(veNew, 3);
-
-  return {
-    VE_old: veOld.values,
-    VE_new: veSmooth,
-    Correction: corrPercent
-  };
+  return { VE_old: veOld.values, VE_new: veSmooth, Correction: corrPercent };
 }
 
 function makeMatrix(r, c, val) {
@@ -43,10 +37,8 @@ function mapRange(v, inMin, inMax, outMin, outMax) {
   return (v - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
 }
 function smoothMatrix(matrix, size) {
-  const r = matrix.length, c = matrix[0].length;
-  const half = Math.floor(size / 2);
+  const r = matrix.length, c = matrix[0].length, half = Math.floor(size / 2);
   const result = makeMatrix(r, c, 0);
-
   for (let i = 0; i < r; i++) {
     for (let j = 0; j < c; j++) {
       let sum = 0, n = 0;
@@ -54,8 +46,7 @@ function smoothMatrix(matrix, size) {
         for (let dj = -half; dj <= half; dj++) {
           const ni = i + di, nj = j + dj;
           if (ni >= 0 && ni < r && nj >= 0 && nj < c) {
-            sum += matrix[ni][nj];
-            n++;
+            sum += matrix[ni][nj]; n++;
           }
         }
       }
