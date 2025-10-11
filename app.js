@@ -4,51 +4,104 @@ import { calculateVE } from './utils/veMath.js';
 import { exportRomRaider } from './utils/exportRomRaider.js';
 
 let logData = [];
-let veOld = null;
+let veOld = {};
 let result = null;
 
-const output = document.getElementById('output');
-const exportBtn = document.getElementById('export');
+// ====== UI элементы ======
+const statusLog = document.getElementById('statusLog');
+const statusVE = document.getElementById('statusVE');
+const statusCalc = document.getElementById('statusCalc');
+const btnLog = document.getElementById('loadLog');
+const btnVE = document.getElementById('loadVE');
+const btnCalc = document.getElementById('calculate');
+const btnExport = document.getElementById('export');
+const outputDiv = document.getElementById('output');
 
-document.getElementById('loadLog').addEventListener('change', async (e) => {
-  logData = await parseLog(e.target.files[0]);
-  output.innerHTML = `<p>✅ Log loaded (${logData.length} rows)</p>`;
+// ====== Загрузка лога ======
+btnLog.addEventListener('change', async (e) => {
+  try {
+    logData = await parseLog(e.target.files[0]);
+    statusLog.textContent = `✅ Log loaded: ${logData.length} lines`;
+    statusLog.style.color = 'limegreen';
+  } catch (err) {
+    statusLog.textContent = `❌ Error reading log: ${err.message}`;
+    statusLog.style.color = 'red';
+  }
 });
 
-document.getElementById('loadVE').addEventListener('change', async (e) => {
-  veOld = await parseVE(e.target.files[0]);
-  output.innerHTML += `<p>✅ VE Table loaded (${veOld.rows}x${veOld.cols})</p>`;
+// ====== Загрузка VE таблицы ======
+btnVE.addEventListener('change', async (e) => {
+  try {
+    veOld = await parseVE(e.target.files[0]);
+    statusVE.textContent = `✅ VE table loaded: ${veOld.rows}x${veOld.cols}`;
+    statusVE.style.color = 'limegreen';
+  } catch (err) {
+    statusVE.textContent = `❌ Error reading VE table: ${err.message}`;
+    statusVE.style.color = 'red';
+  }
 });
 
-document.getElementById('calculate').addEventListener('click', () => {
-  if (!logData.length || !veOld) {
-    output.innerHTML = `<p class="placeholder">❗ Загрузите лог и VE таблицу сначала.</p>`;
+// ====== Калькуляция ======
+btnCalc.addEventListener('click', () => {
+  try {
+    if (!logData.length || !veOld.values) {
+      throw new Error('Missing log or VE table');
+    }
+
+    statusCalc.textContent = '⚙️ Calculating...';
+    statusCalc.style.color = 'orange';
+    outputDiv.innerHTML = '';
+
+    result = calculateVE(logData, veOld);
+    if (!result || !result.VE_new) throw new Error('Calculation failed');
+
+    const filledCells = result.VE_new.flat().filter(v => v !== 0).length;
+    statusCalc.textContent = `✅ Calculation complete (${filledCells} cells updated)`;
+    statusCalc.style.color = 'limegreen';
+
+    showTables(result);
+  } catch (err) {
+    statusCalc.textContent = `❌ Error: ${err.message}`;
+    statusCalc.style.color = 'red';
+  }
+});
+
+// ====== Экспорт ======
+btnExport.addEventListener('click', () => {
+  if (!result) {
+    alert('No data to export. Please calculate VE first.');
     return;
   }
-  result = calculateVE(logData, veOld);
-  renderTables(result);
-  exportBtn.disabled = false;
-});
-
-exportBtn.addEventListener('click', () => {
   exportRomRaider(result.VE_new);
 });
 
-function renderTables(data) {
-  const { VE_old, VE_new, Correction } = data;
-
-  const makeTable = (matrix, title) => {
-    let html = `<table><caption>${title}</caption>`;
-    matrix.forEach(row => {
-      html += '<tr>' + row.map(v => `<td>${v.toFixed(1)}</td>`).join('') + '</tr>';
-    });
-    html += '</table>';
-    return html;
-  };
-
-  output.innerHTML = `
-    <div class="table-block">${makeTable(VE_old, 'VE Old')}</div>
-    <div class="table-block">${makeTable(VE_new, 'VE New')}</div>
-    <div class="table-block">${makeTable(Correction, 'Correction %')}</div>
+// ====== Отображение таблиц ======
+function showTables(result) {
+  outputDiv.innerHTML = `
+    <h3>Old VE</h3>
+    ${renderTable(result.VE_old)}
+    <h3>New VE (smoothed)</h3>
+    ${renderTable(result.VE_new)}
+    <h3>Correction %</h3>
+    ${renderTable(result.Correction, true)}
   `;
+}
+
+// ====== Рендер таблицы ======
+function renderTable(matrix, isCorr = false) {
+  let html = '<table class="ve-table">';
+  matrix.forEach(row => {
+    html += '<tr>';
+    row.forEach(val => {
+      let color = '';
+      if (isCorr) {
+        if (val > 2) color = 'style="background:#3366ff33"'; // обеднение
+        else if (val < -2) color = 'style="background:#ff333333"'; // обогащение
+      }
+      html += `<td ${color}>${val.toFixed(2)}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</table>';
+  return html;
 }
