@@ -1,22 +1,28 @@
 function parseVEFile(content) {
     const lines = content.trim().split(/\r?\n/).filter(line => line.trim() !== "");
+    const dataLines = lines.filter(line => !line.toLowerCase().includes("таблица")); // пропускаем заголовок
 
     const veTable = [];
     let headers = [];
 
-    lines.forEach((line, index) => {
-        const cols = line.split(/[,;\t]/).map(v => v.trim()).filter(v => v !== "");
+    dataLines.forEach((line, index) => {
+        const cols = line.split(";").map(v => v.trim()).filter(v => v !== "");
         if (index === 0) {
-            // первая строка — MAP ось
+            // первая строка — ось MAP
             headers = cols.map(v => parseFloat(v));
         } else {
-            const rowRPM = parseFloat(cols[0]);
-            const rowData = cols.slice(1).map(v => parseFloat(v));
-            veTable.push([rowRPM, ...rowData]);
+            const rpm = parseFloat(cols[0]);
+            const row = cols.slice(1).map(v => parseFloat(v));
+            if (!isNaN(rpm) && row.length > 0) {
+                veTable.push([rpm, ...row]);
+            }
         }
     });
 
-    if (veTable.length === 0) throw new Error("VE table appears empty or invalid format.");
+    if (veTable.length === 0) {
+        throw new Error("VE table appears empty or invalid format.");
+    }
 
+    console.log("✅ Parsed VE table:", veTable.length, "rows,", veTable[0].length - 1, "columns");
     return { headers, veTable };
 }
