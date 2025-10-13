@@ -1,53 +1,30 @@
-// parseLog.js — адаптировано под Log_ve_vadim.csv
-
 export async function parseLog(file) {
   const text = await file.text();
-  const lines = text
-    .split(/\r?\n/)
-    .map(l => l.trim())
-    .filter(l => l.length > 0);
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
 
-  // Определяем разделитель ("," ";" или таб)
-  const sep = lines[0].includes(";") ? ";" :
-              lines[0].includes("\t") ? "\t" : ",";
-
-  // Заголовки
+  const sep = lines[0].includes(';') ? ';' : (lines[0].includes('\t') ? '\t' : ',');
   const headers = lines[0].split(sep).map(h => h.trim().toLowerCase());
 
-  // Индексы нужных колонок
-  const idxRPM = headers.findIndex(h => h.includes("engine speed"));
-  const idxMAP = headers.findIndex(h => h.includes("manifold absolute pressure"));
-  const idxAFR = headers.findIndex(h => h.includes("wideband"));
-  const idxTarget = headers.findIndex(h => h.includes("fueling final base"));
+  const idxAFRwide = headers.findIndex(h => h.includes('aem uego') || h.includes('wideband') || h.includes('afr gasoline') || h.includes('afr'));
+  const idxRPM = headers.findIndex(h => h.includes('engine speed') || h.includes('rpm'));
+  const idxMAP = headers.findIndex(h => (h.includes('manifold') && h.includes('pressure')) || h.includes('map') || h.includes('manifold absolute pressure'));
+  const idxFuelBase = headers.findIndex(h => h.includes('fueling final') || h.includes('estimated afr') || h.includes('fueling final base'));
 
-  if (idxRPM < 0 || idxMAP < 0 || idxAFR < 0 || idxTarget < 0) {
-    throw new Error("❌ Не найдены нужные колонки (RPM, MAP, AFR, AFR Target)");
+  if (idxRPM < 0 || idxMAP < 0 || idxAFRwide < 0 || idxFuelBase < 0) {
+    throw new Error('Не найдены необходимые колонки. Ожидаются: Engine Speed, Manifold Absolute Pressure, AEM UEGO Wideband, Fueling Final Base');
   }
 
-  const data = [];
-
+  const out = [];
   for (let i = 1; i < lines.length; i++) {
     const parts = lines[i].split(sep).map(p => p.trim());
-    if (parts.length <= Math.max(idxRPM, idxMAP, idxAFR, idxTarget)) continue;
-
+    if (parts.length <= Math.max(idxRPM, idxMAP, idxAFRwide, idxFuelBase)) continue;
     const rpm = parseFloat(parts[idxRPM]);
     const mapBar = parseFloat(parts[idxMAP]);
-    const afr = parseFloat(parts[idxAFR]);
-    const afrTarget = parseFloat(parts[idxTarget]);
-
-    if (isNaN(rpm) || isNaN(mapBar) || isNaN(afr) || isNaN(afrTarget)) continue;
-
-    // Перевод MAP из бар в kPa
+    const afr = parseFloat(parts[idxAFRwide]);
+    const afrTarget = parseFloat(parts[idxFuelBase]);
+    if ([rpm, mapBar, afr, afrTarget].some(v => Number.isNaN(v))) continue;
     const mapKpa = mapBar < 5 ? mapBar * 100 : mapBar;
-
-    data.push({
-      rpm,
-      map: mapKpa,
-      afr,
-      afrTarget
-    });
+    out.push({ rpm, map: mapKpa, afr, afrTarget });
   }
-
-  console.log(`✅ Parsed ${data.length} valid lines`);
-  return data;
+  return out;
 }
