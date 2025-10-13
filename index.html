@@ -1,40 +1,51 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VE Calculator v1.2 Lite</title>
-  <link rel="stylesheet" href="style.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VE Calculator v1.0.1</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>VE Calculator v1.2 Lite</h1>
-  <p class="info">
-    Upload your log and VE table to calculate and smooth corrected VE values.
-  </p>
+  <div class="app-container">
+    <header class="header">
+      <h1 class="logo">VE Calculator <span class="ver">v1.0.1</span></h1>
+      <p class="subtitle">Лёгкий VE-калькулятор — стиль как у Log Reader</p>
+    </header>
 
-  <div class="controls">
-    <label>Load Log: <input type="file" id="loadLog" accept=".csv,.txt" /></label>
-    <label>Load VE Table: <input type="file" id="loadVE" accept=".csv,.txt" /></label>
-    <button id="calculate">Calculate VE</button>
-    <button id="export">Export</button>
+    <main class="main">
+      <section class="upload">
+        <div class="card">
+          <label class="lbl">📄 Загрузить лог-файл</label>
+          <input id="loadLog" type="file" accept=".csv,.txt" />
+          <div id="statusLog" class="status">Не загружено</div>
+        </div>
+
+        <div class="card">
+          <label class="lbl">📊 Загрузить VE таблицу</label>
+          <input id="loadVE" type="file" accept=".csv,.txt,.xlsx" />
+          <div id="statusVE" class="status">Не загружено</div>
+        </div>
+
+        <div class="actions">
+          <button id="calculate" class="btn primary">▶ Рассчитать VE</button>
+          <button id="export" class="btn" id="exportBtn" disabled>💾 Экспорт CSV</button>
+        </div>
+
+        <div id="statusCalc" class="status calc-status">Ожидание</div>
+      </section>
+
+      <section id="debug-section" class="card debug-section">
+        <h3>🧠 Отладка лога</h3>
+        <div id="debugLog" class="debugbox">Ожидание загрузки...</div>
+      </section>
+
+      <section id="output" class="card output"></section>
+    </main>
+
+    <footer class="footer">Made for quick VE tuning — compatible with your Log Reader styles</footer>
   </div>
 
-  <div class="status-line">
-    <span id="statusLog"></span><br />
-    <span id="statusVE"></span><br />
-    <span id="statusCalc"></span><br />
-    <span id="statusDebug"></span>
-  </div>
-
-  <h3>📘 Mini Instruction</h3>
-  <p class="minihelp">
-    Log must include: <b>RPM</b>, <b>Manifold Pressure</b>, <b>AFR Actual</b>, <b>AFR Target</b><br />
-    VE Table: CSV or TXT with numeric cells only.<br />
-    Example columns: <code>rpm, map, afr actual, afr target</code> (case-insensitive)
-  </p>
-
-  <div id="output"></div>
-
-  <script type="module" src="./app.js"></script>
+<script type="module" src="./app.js"></script>
 </body>
 </html>
