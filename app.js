@@ -17,36 +17,42 @@ function setDebug(txt) {
   if (d) d.textContent = txt;
 }
 
-// Load log
-document.getElementById('loadLog').addEventListener('change', async (e) => {
-  const f = e.target.files && e.target.files[0];
-  if (!f) return;
+async function handleLogFile(file) {
   setStatus('statusLog','⏳ Чтение лога...','var(--muted)');
   try {
-    logData = await parseLog(f);
+    const parsed = await parseLog(file);
+    logData = parsed;
     setStatus('statusLog', `✅ Log loaded (${logData.length} valid lines)`, '#7BE495');
-    const cols = logData.length ? Object.keys(logData[0]).join(', ') : 'нет данных';
-    setDebug(`Detected columns: ${cols}\nSample lines: ${Math.min(5, logData.length)}`);
+    setDebug(`Detected columns: ${Object.keys(logData[0] || {}).join(', ')}\nSample lines: ${Math.min(5, logData.length)}`);
   } catch (err) {
     setStatus('statusLog', `❌ Ошибка: ${err.message}`, '#ff6b6b');
     setDebug(err.stack || String(err));
   }
-});
+}
 
-// Load VE table
-document.getElementById('loadVE').addEventListener('change', async (e) => {
-  const f = e.target.files && e.target.files[0];
-  if (!f) return;
+async function handleVEFile(file) {
   setStatus('statusVE','⏳ Чтение VE...','var(--muted)');
   try {
-    veOld = await parseVE(f);
+    const parsed = await parseVE(file);
+    veOld = parsed;
     setStatus('statusVE', `✅ VE table loaded (${veOld.rows}x${veOld.cols})`, '#7BE495');
+    setDebug((document.getElementById('debugLog').textContent || '') + `\nVE size: ${veOld.rows}x${veOld.cols}`);
   } catch (err) {
     setStatus('statusVE', `❌ Ошибка: ${err.message}`, '#ff6b6b');
+    setDebug(err.stack || String(err));
   }
-});
+}
 
-// Calculate
+// support mobile where input change sometimes not fired - listen both change and input
+const logInput = document.getElementById('loadLog');
+const veInput = document.getElementById('loadVE');
+
+logInput.addEventListener('change', (e) => { if(e.target.files[0]) handleLogFile(e.target.files[0]); });
+logInput.addEventListener('input', (e) => { if(e.target.files[0]) handleLogFile(e.target.files[0]); });
+
+veInput.addEventListener('change', (e) => { if(e.target.files[0]) handleVEFile(e.target.files[0]); });
+veInput.addEventListener('input', (e) => { if(e.target.files[0]) handleVEFile(e.target.files[0]); });
+
 document.getElementById('calculate').addEventListener('click', () => {
   if (!logData || !veOld) {
     setStatus('statusCalc','⚠️ Загрузите лог и VE таблицу','orange');
@@ -65,7 +71,6 @@ document.getElementById('calculate').addEventListener('click', () => {
   }
 });
 
-// Export
 document.getElementById('export').addEventListener('click', () => {
   if (!result || !result.VE_new) {
     setStatus('statusCalc','⚠️ Нет данных для экспорта','orange');

@@ -3,8 +3,8 @@ export function calculateVE(log, veOld) {
   const corrSum = makeMatrix(rows, cols, 0), count = makeMatrix(rows, cols, 0);
 
   log.forEach(p => {
-    const afr = p.afr !== undefined ? p.afr : p.afrActual ?? p.afr_actual ?? p.AFR;
-    const afrTarget = p.afrTarget !== undefined ? p.afrTarget : p.afrTarget ?? p.afr_target ?? p.targetAFR;
+    const afr = p.afr;
+    const afrTarget = p.afrTarget;
     const afrCorr = limit(afrTarget / afr, 0.75, 1.25);
     const i = clamp(Math.floor(mapRange(p.map, 20, 200, 0, rows-1)), 0, rows-1);
     const j = clamp(Math.floor(mapRange(p.rpm, 800, 7000, 0, cols-1)), 0, cols-1);

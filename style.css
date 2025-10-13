@@ -36,7 +36,7 @@ input[type=file]{width:100%;padding:8px;background:transparent;border:1px dashed
 .calc-status{margin-top:10px;font-weight:600}
 
 .debug-section{padding:12px}
-.debugbox{background:#171717;border:1px solid rgba(255,255,255,0.03);padding:10px;border-radius:8px;color:var(--muted);min-height:64px;white-space:pre-wrap;font-size:0.9rem}
+.debugbox{background:#171717;border:1px solid rgba(255,255,255,0.03);padding:10px;border-radius:8px;color:var(--muted);min-height:80px;white-space:pre-wrap;font-size:0.9rem}
 
 .output{padding:12px;display:block}
 .ve-table{width:100%;border-collapse:collapse;margin-top:8px}
