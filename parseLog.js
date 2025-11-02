@@ -1,57 +1,53 @@
 export async function parseLog(file) {
   const text = await file.text();
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-  if (lines.length < 2) throw new Error('Лог пустой или слишком короткий');
+  
+  if (lines.length < 2) throw new Error('Log file is empty or too short');
 
   const sep = detectSeparator(lines[0]);
   const headers = lines[0].split(sep).map(h => h.trim().toLowerCase());
 
-  // Расширенный поиск колонок
-  const columnMap = {
-    rpm: findColumn(headers, ['rpm', 'engine speed', 'enginespeed', 'speed']),
-    map: findColumn(headers, ['map', 'manifold pressure', 'manifold absolute pressure', 'boost', 'pressure']),
-    afr: findColumn(headers, ['afr', 'wideband', 'aem', 'lambda', 'uo2', 'oxygen']),
-    afrTarget: findColumn(headers, ['afr target', 'target afr', 'commanded afr', 'fuel final', 'afr commanded', 'target'])
-  };
+  console.log('Log headers:', headers);
 
-  // Проверка обязательных колонок
-  if (columnMap.rpm === -1) throw new Error('Не найдена колонка RPM');
-  if (columnMap.map === -1) throw new Error('Не найдена колонка MAP');
-  if (columnMap.afr === -1) throw new Error('Не найдена колонка AFR');
+  // Simple column detection - adjust based on your actual CSV
+  const rpmIndex = headers.findIndex(h => h.includes('rpm'));
+  const mapIndex = headers.findIndex(h => h.includes('map') || h.includes('pressure'));
+  const afrIndex = headers.findIndex(h => h.includes('afr') || h.includes('wideband'));
+  const targetIndex = headers.findIndex(h => h.includes('target'));
+
+  console.log('Column indices - RPM:', rpmIndex, 'MAP:', mapIndex, 'AFR:', afrIndex, 'Target:', targetIndex);
+
+  if (rpmIndex === -1 || mapIndex === -1 || afrIndex === -1) {
+    throw new Error('Required columns not found. Available: ' + headers.join(', '));
+  }
 
   const out = [];
-  let skipped = 0;
   
   for (let i = 1; i < lines.length; i++) {
     const parts = lines[i].split(sep).map(p => p.trim());
-    if (parts.length < headers.length) {
-      skipped++;
-      continue;
-    }
+    if (parts.length < Math.max(rpmIndex, mapIndex, afrIndex) + 1) continue;
 
-    const rpm = parseFloat(parts[columnMap.rpm]);
-    let mapVal = parseFloat(parts[columnMap.map]);
-    const afr = parseFloat(parts[columnMap.afr]);
+    const rpm = parseFloat(parts[rpmIndex]);
+    let mapVal = parseFloat(parts[mapIndex]);
+    const afr = parseFloat(parts[afrIndex]);
     
-    // Автоопределение единиц MAP
-    if (mapVal < 5) mapVal *= 100; // convert bar to kPa
-    else if (mapVal > 200) mapVal /= 10; // convert hPa to kPa
+    // Auto-detect MAP units
+    if (mapVal < 5) mapVal *= 100; // bar to kPa
+    else if (mapVal > 200) mapVal /= 10; // hPa to kPa
 
-    // Валидация данных
-    if (!isValidRange(rpm, 300, 8000) || !isValidRange(mapVal, 10, 300) || 
-        !isValidRange(afr, 8, 22)) {
-      skipped++;
-      continue;
+    // Basic validation
+    if (isNaN(rpm) || isNaN(mapVal) || isNaN(afr)) continue;
+    if (rpm < 300 || rpm > 8000 || mapVal < 10 || mapVal > 300 || afr < 8 || afr > 22) continue;
+
+    // AFR target (optional)
+    let afrTarget = 14.7;
+    if (targetIndex !== -1) {
+      const targetVal = parseFloat(parts[targetIndex]);
+      if (!isNaN(targetVal) && targetVal >= 8 && targetVal <= 22) {
+        afrTarget = targetVal;
+      }
     }
 
-    // AFR target (опциональный)
-    let afrTarget = afr; // fallback
-    if (columnMap.afrTarget !== -1) {
-      afrTarget = parseFloat(parts[columnMap.afrTarget]);
-      if (!isValidRange(afrTarget, 8, 22)) afrTarget = 14.7; // default stoich
-    }
-
-    // Фильтр стабильных условий (исключаем переходные процессы)
     out.push({ 
       rpm: Math.round(rpm), 
       map: Math.round(mapVal * 10) / 10, 
@@ -60,9 +56,9 @@ export async function parseLog(file) {
     });
   }
 
-  if (out.length === 0) throw new Error('Нет валидных данных после фильтрации');
-  
-  console.log(`Загружено: ${out.length} строк, пропущено: ${skipped} некорректных`);
+  if (out.length === 0) throw new Error('No valid data points found after filtering');
+
+  console.log('Successfully parsed', out.length, 'log entries');
   return out;
 }
 
@@ -70,16 +66,4 @@ function detectSeparator(line) {
   if (line.includes(';')) return ';';
   if (line.includes('\t')) return '\t';
   return ',';
-}
-
-function findColumn(headers, patterns) {
-  for (const pattern of patterns) {
-    const idx = headers.findIndex(h => h.includes(pattern.toLowerCase()));
-    if (idx !== -1) return idx;
-  }
-  return -1;
-}
-
-function isValidRange(value, min, max) {
-  return !isNaN(value) && value >= min && value <= max;
 }
