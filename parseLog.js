@@ -1,4 +1,5 @@
 export async function parseLog(file) {
+  console.log('🟢 FORCE PARSING LOG...');
   const text = await file.text();
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
   
@@ -6,61 +7,50 @@ export async function parseLog(file) {
 
   const sep = ';';
   const headers = lines[0].split(sep).map(h => h.trim().toLowerCase());
+  
+  console.log('HEADERS FOUND:', headers);
 
-  console.log('Log headers:', headers);
-
-  // Определяем индексы колонок
+  // Принудительно определяем колонки по индексам (ваш лог имеет фиксированный порядок)
   const columnMap = {
-    rpm: headers.findIndex(h => h.includes('engine speed') || h.includes('rpm')),
-    map: headers.findIndex(h => h.includes('manifold absolute pressure') || h.includes('map')),
-    afr: headers.findIndex(h => h.includes('aem uego') || h.includes('afr gasoline') || h.includes('wideband')),
-    afrTarget: headers.findIndex(h => h.includes('fueling final') || h.includes('estimated afr') || h.includes('target'))
+    rpm: 1,        // "Engine Speed (rpm)"
+    map: 3,        // "Manifold Absolute Pressure (kPa)" 
+    afr: 7,        // "AEM UEGO Wideband [9600 baud] (AFR Gasoline)"
+    afrTarget: 8   // "Fueling Final Base* (estimated AFR)"
   };
 
-  console.log('Column indices:', columnMap);
-
-  if (columnMap.rpm === -1) throw new Error('RPM column not found');
-  if (columnMap.map === -1) throw new Error('MAP column not found');
-  if (columnMap.afr === -1) throw new Error('AFR column not found');
+  console.log('Using forced column indices:', columnMap);
 
   const out = [];
   
-  for (let i = 1; i < lines.length; i++) {
+  // Берем только первые 50 строк для теста
+  for (let i = 1; i < Math.min(lines.length, 50); i++) {
     const parts = lines[i].split(sep).map(p => p.trim());
-    if (parts.length <= Math.max(columnMap.rpm, columnMap.map, columnMap.afr)) continue;
+    if (parts.length < 9) continue; // Должно быть至少 9 колонок
 
-    // Парсим значения
-    const rpm = parseFloat(parts[columnMap.rpm].replace(',', '.'));
-    const mapValKPA = parseFloat(parts[columnMap.map].replace(',', '.'));
-    const afr = parseFloat(parts[columnMap.afr].replace(',', '.'));
+    try {
+      const rpm = parseFloat(parts[1].replace(',', '.'));
+      const mapValKPA = parseFloat(parts[3].replace(',', '.'));
+      const afr = parseFloat(parts[7].replace(',', '.'));
+      const afrTarget = parseFloat(parts[8].replace(',', '.'));
 
-    // Пропускаем только полностью невалидные данные
-    if (isNaN(rpm) || isNaN(mapValKPA) || isNaN(afr)) continue;
+      // Конвертируем kPa в PSI
+      const mapValPSI = mapValKPA * 0.145038;
 
-    // Конвертируем kPa в PSI
-    const mapValPSI = mapValKPA * 0.145038;
-
-    // AFR target
-    let afrTarget = 14.7;
-    if (columnMap.afrTarget !== -1) {
-      const targetVal = parseFloat(parts[columnMap.afrTarget].replace(',', '.'));
-      if (!isNaN(targetVal)) {
-        afrTarget = targetVal;
-      }
+      out.push({ 
+        rpm: Math.round(rpm), 
+        map: Math.round(mapValPSI * 100) / 100,
+        afr: Math.round(afr * 100) / 100, 
+        afrTarget: Math.round(afrTarget * 100) / 100 
+      });
+    } catch (err) {
+      console.log('Error parsing line', i, err);
     }
-
-    out.push({ 
-      rpm: Math.round(rpm), 
-      map: Math.round(mapValPSI * 100) / 100,
-      afr: Math.round(afr * 100) / 100, 
-      afrTarget: Math.round(afrTarget * 100) / 100 
-    });
   }
 
-  if (out.length === 0) throw new Error('No numeric data found in log file');
-
-  console.log('Successfully parsed', out.length, 'log entries');
-  console.log('Sample data:', out.slice(0, 3));
+  console.log(`Parsed ${out.length} points from first 50 lines`);
+  console.log('Sample:', out.slice(0, 3));
+  
+  if (out.length === 0) throw new Error('Force parsing failed - no data extracted');
   
   return out;
 }
