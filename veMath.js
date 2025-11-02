@@ -5,7 +5,11 @@ export function calculateVE(log, veOld) {
   log.forEach(p => {
     const afr = p.afr;
     const afrTarget = p.afrTarget;
-    const afrCorr = limit(afrTarget / afr, 0.75, 1.25);
+
+    // ✅ Исправлено направление коррекции:
+    // если смесь богаче (afr < target) — коэффициент < 1 → VE уменьшается
+    const afrCorr = limit(afr / afrTarget, 0.75, 1.25);
+
     const i = clamp(Math.floor(mapRange(p.map, 20, 200, 0, rows-1)), 0, rows-1);
     const j = clamp(Math.floor(mapRange(p.rpm, 800, 7000, 0, cols-1)), 0, cols-1);
     corrSum[i][j] += afrCorr;
