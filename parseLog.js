@@ -24,55 +24,43 @@ export async function parseLog(file) {
   if (columnMap.afr === -1) throw new Error('AFR column not found');
 
   const out = [];
-  let skipped = 0;
   
   for (let i = 1; i < lines.length; i++) {
     const parts = lines[i].split(sep).map(p => p.trim());
-    if (parts.length < Math.max(columnMap.rpm, columnMap.map, columnMap.afr) + 1) {
-      skipped++;
-      continue;
-    }
+    if (parts.length <= Math.max(columnMap.rpm, columnMap.map, columnMap.afr)) continue;
 
     // Парсим значения
     const rpm = parseFloat(parts[columnMap.rpm].replace(',', '.'));
-    const mapValKPA = parseFloat(parts[columnMap.map].replace(',', '.')); // В kPa из лога
+    const mapValKPA = parseFloat(parts[columnMap.map].replace(',', '.'));
     const afr = parseFloat(parts[columnMap.afr].replace(',', '.'));
 
-    // Конвертируем kPa в PSI (1 kPa = 0.145038 PSI)
+    // Пропускаем только полностью невалидные данные
+    if (isNaN(rpm) || isNaN(mapValKPA) || isNaN(afr)) continue;
+
+    // Конвертируем kPa в PSI
     const mapValPSI = mapValKPA * 0.145038;
-
-    // Валидация данных
-    if (isNaN(rpm) || isNaN(mapValPSI) || isNaN(afr)) {
-      skipped++;
-      continue;
-    }
-
-    // Фильтруем некорректные данные (теперь в PSI)
-    if (rpm < 300 || rpm > 8000 || mapValPSI < 1 || mapValPSI > 45 || afr < 8 || afr > 22) {
-      skipped++;
-      continue;
-    }
 
     // AFR target
     let afrTarget = 14.7;
     if (columnMap.afrTarget !== -1) {
       const targetVal = parseFloat(parts[columnMap.afrTarget].replace(',', '.'));
-      if (!isNaN(targetVal) && targetVal >= 8 && targetVal <= 22) {
+      if (!isNaN(targetVal)) {
         afrTarget = targetVal;
       }
     }
 
     out.push({ 
       rpm: Math.round(rpm), 
-      map: Math.round(mapValPSI * 100) / 100, // Теперь в PSI!
+      map: Math.round(mapValPSI * 100) / 100,
       afr: Math.round(afr * 100) / 100, 
       afrTarget: Math.round(afrTarget * 100) / 100 
     });
   }
 
-  if (out.length === 0) throw new Error('No valid data points found after filtering');
+  if (out.length === 0) throw new Error('No numeric data found in log file');
 
-  console.log('Successfully parsed', out.length, 'log entries, skipped:', skipped);
-  console.log('MAP range in log (PSI):', Math.min(...out.map(p => p.map)), '-', Math.max(...out.map(p => p.map)));
+  console.log('Successfully parsed', out.length, 'log entries');
+  console.log('Sample data:', out.slice(0, 3));
+  
   return out;
 }
