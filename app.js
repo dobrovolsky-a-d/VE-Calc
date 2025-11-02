@@ -22,8 +22,14 @@ async function handleLogFile(file) {
   try {
     const parsed = await parseLog(file);
     logData = parsed;
-    setStatus('statusLog', `✅ Log loaded (${logData.length} valid lines)`, '#7BE495');
-    setDebug(`Detected columns: ${Object.keys(logData[0] || {}).join(', ')}\nSample lines: ${Math.min(5, logData.length)}`);
+    
+    // Статистика по логу
+    const rpmStats = getStats(parsed.map(p => p.rpm));
+    const mapStats = getStats(parsed.map(p => p.map));
+    const afrStats = getStats(parsed.map(p => p.afr));
+    
+    setStatus('statusLog', `✅ Log: ${logData.length} строк`, '#7BE495');
+    setDebug(`RPM: ${rpmStats.min}-${rpmStats.max} | MAP: ${mapStats.min}-${mapStats.max} | AFR: ${afrStats.min}-${afrStats.max}\nОбразец: ${JSON.stringify(parsed[0])}`);
   } catch (err) {
     setStatus('statusLog', `❌ Ошибка: ${err.message}`, '#ff6b6b');
     setDebug(err.stack || String(err));
@@ -35,15 +41,24 @@ async function handleVEFile(file) {
   try {
     const parsed = await parseVE(file);
     veOld = parsed;
-    setStatus('statusVE', `✅ VE table loaded (${veOld.rows}x${veOld.cols})`, '#7BE495');
-    setDebug((document.getElementById('debugLog').textContent || '') + `\nVE size: ${veOld.rows}x${veOld.cols}`);
+    setStatus('statusVE', `✅ VE: ${veOld.rows}x${veOld.cols}`, '#7BE495');
+    setDebug((document.getElementById('debugLog').textContent || '') + `\nVE: ${veOld.rpmAxis?.join(', ')} RPM | ${veOld.mapAxis?.join(', ')} MAP`);
   } catch (err) {
     setStatus('statusVE', `❌ Ошибка: ${err.message}`, '#ff6b6b');
     setDebug(err.stack || String(err));
   }
 }
 
-// support mobile where input change sometimes not fired - listen both change and input
+// Вспомогательная функция для статистики
+function getStats(arr) {
+  return {
+    min: Math.min(...arr),
+    max: Math.max(...arr),
+    avg: arr.reduce((a, b) => a + b, 0) / arr.length
+  };
+}
+
+// Остальной код без изменений...
 const logInput = document.getElementById('loadLog');
 const veInput = document.getElementById('loadVE');
 
@@ -83,11 +98,19 @@ document.getElementById('export').addEventListener('click', () => {
 function renderResult(data) {
   const out = document.getElementById('output');
   out.innerHTML = '';
+  
+  // Добавляем статистику по точкам данных
+  const statsCard = document.createElement('div');
+  statsCard.className = 'card';
+  statsCard.innerHTML = `<h3>📊 Статистика данных</h3><p>Точек данных на ячейку: min ${Math.min(...data.DataPoints.flat())}, max ${Math.max(...data.DataPoints.flat())}</p>`;
+  out.appendChild(statsCard);
+  
   const sections = [
     {title:'Original VE', matrix: data.VE_old},
     {title:'Correction (%)', matrix: data.Correction},
     {title:'Smoothed VE', matrix: data.VE_new}
   ];
+  
   sections.forEach(s => {
     const card = document.createElement('div');
     card.className = 'card';
