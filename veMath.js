@@ -20,7 +20,7 @@ export function calculateVE(log, veOld) {
   });
 
   // --- пересчёт VE ---
-  let veNew = makeMatrix(rows, cols, 0); // Используем let вместо const
+  const veNew = makeMatrix(rows, cols, 0);
   const corrPercent = makeMatrix(rows, cols, 0);
   
   for (let i = 0; i < rows; i++) {
@@ -32,10 +32,10 @@ export function calculateVE(log, veOld) {
   }
 
   // --- улучшенная интерполяция пустых ячеек ---
-  veNew = interpolateEmptyCells(veNew, count, veOld.values);
+  const veInterpolated = interpolateEmptyCells(veNew, count, veOld.values);
 
   // --- адаптивное сглаживание ---
-  const veSmooth = adaptiveSmoothMatrix(veNew, count);
+  const veSmooth = adaptiveSmoothMatrix(veInterpolated, count);
 
   return {
     VE_old: veOld.values,
@@ -48,8 +48,16 @@ export function calculateVE(log, veOld) {
 // Новая улучшенная интерполяция
 function interpolateEmptyCells(matrix, count, fallback) {
   const rows = matrix.length, cols = matrix[0].length;
-  const result = matrix.map(row => [...row]); // Создаем копию
+  const result = makeMatrix(rows, cols, 0);
   
+  // Сначала копируем все существующие значения
+  for (let i = 0; i < rows; i++) {
+    for (let j = 0; j < cols; j++) {
+      result[i][j] = matrix[i][j];
+    }
+  }
+  
+  // Затем интерполируем пустые ячейки
   for (let i = 0; i < rows; i++) {
     for (let j = 0; j < cols; j++) {
       if (count[i][j] === 0) {
