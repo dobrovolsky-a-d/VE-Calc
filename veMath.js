@@ -1,22 +1,30 @@
 // ====== veMath.js ======
 
 export function calculateVE(log, veOld) {
-  const rows = veOld.rows, cols = veOld.cols;
-  const corrSum = makeMatrix(rows, cols, 0), count = makeMatrix(rows, cols, 0);
+  const rows = veOld.rows;
+  const cols = veOld.cols;
+  const corrSum = makeMatrix(rows, cols, 0);
+  const count = makeMatrix(rows, cols, 0);
+
+  console.log('Starting VE calculation with:', rows, 'rows,', cols, 'cols');
 
   // --- обработка лога ---
-  log.forEach(p => {
-    const afr = p.afr;
-    const afrTarget = p.afrTarget;
-    
-    // ✅ ПРАВИЛЬНОЕ направление коррекции
-    const afrCorr = limit(afrTarget / afr, 0.75, 1.25);
-    
-    const i = clamp(Math.floor(mapRange(p.map, 20, 200, 0, rows - 1)), 0, rows - 1);
-    const j = clamp(Math.floor(mapRange(p.rpm, 800, 7000, 0, cols - 1)), 0, cols - 1);
-    
-    corrSum[i][j] += afrCorr;
-    count[i][j]++;
+  log.forEach((p, index) => {
+    try {
+      const afr = p.afr;
+      const afrTarget = p.afrTarget;
+      
+      // ✅ ПРАВИЛЬНОЕ направление коррекции
+      const afrCorr = limit(afrTarget / afr, 0.75, 1.25);
+      
+      const i = clamp(Math.floor(mapRange(p.map, 20, 200, 0, rows - 1)), 0, rows - 1);
+      const j = clamp(Math.floor(mapRange(p.rpm, 800, 7000, 0, cols - 1)), 0, cols - 1);
+      
+      corrSum[i][j] += afrCorr;
+      count[i][j]++;
+    } catch (err) {
+      console.error('Error processing log point', index, p, err);
+    }
   });
 
   // --- пересчёт VE ---
@@ -31,106 +39,56 @@ export function calculateVE(log, veOld) {
     }
   }
 
-  // --- улучшенная интерполяция пустых ячеек ---
-  const veInterpolated = interpolateEmptyCells(veNew, count, veOld.values);
+  // --- простое сглаживание без сложной логики ---
+  const veSmooth = simpleSmoothMatrix(veNew);
 
-  // --- адаптивное сглаживание ---
-  const veSmooth = adaptiveSmoothMatrix(veInterpolated, count);
+  console.log('VE calculation completed');
 
   return {
     VE_old: veOld.values,
     VE_new: veSmooth,
     Correction: corrPercent,
-    DataPoints: count // для отладки
+    DataPoints: count
   };
 }
 
-// Новая улучшенная интерполяция
-function interpolateEmptyCells(matrix, count, fallback) {
-  const rows = matrix.length, cols = matrix[0].length;
+// Простое сглаживание
+function simpleSmoothMatrix(matrix) {
+  const rows = matrix.length;
+  const cols = matrix[0].length;
   const result = makeMatrix(rows, cols, 0);
-  
-  // Сначала копируем все существующие значения
+
   for (let i = 0; i < rows; i++) {
     for (let j = 0; j < cols; j++) {
-      result[i][j] = matrix[i][j];
-    }
-  }
-  
-  // Затем интерполируем пустые ячейки
-  for (let i = 0; i < rows; i++) {
-    for (let j = 0; j < cols; j++) {
-      if (count[i][j] === 0) {
-        // Ищем ближайшие известные значения в радиусе
-        const neighbors = [];
-        const radius = 2;
-        
-        for (let di = -radius; di <= radius; di++) {
-          for (let dj = -radius; dj <= radius; dj++) {
-            const ni = i + di, nj = j + dj;
-            if (ni >= 0 && ni < rows && nj >= 0 && nj < cols && count[ni][nj] > 0) {
-              neighbors.push(matrix[ni][nj]);
-            }
+      let sum = 0;
+      let n = 0;
+      
+      // 3x3 smoothing kernel
+      for (let di = -1; di <= 1; di++) {
+        for (let dj = -1; dj <= 1; dj++) {
+          const ni = i + di;
+          const nj = j + dj;
+          if (ni >= 0 && ni < rows && nj >= 0 && nj < cols) {
+            sum += matrix[ni][nj];
+            n++;
           }
         }
-        
-        if (neighbors.length > 0) {
-          // Среднее значение соседей
-          result[i][j] = neighbors.reduce((a, b) => a + b, 0) / neighbors.length;
-        } else {
-          result[i][j] = fallback[i][j] || 0;
-        }
       }
-    }
-  }
-  
-  return result;
-}
-
-// Адаптивное сглаживание (меньше сглаживания там, где больше данных)
-function adaptiveSmoothMatrix(matrix, count) {
-  const rows = matrix.length, cols = matrix[0].length;
-  const result = makeMatrix(rows, cols, 0);
-
-  for (let i = 0; i < rows; i++) {
-    for (let j = 0; j < cols; j++) {
-      const dataPoints = count[i][j];
       
-      if (dataPoints >= 5) {
-        // Много данных - минимальное сглаживание
-        result[i][j] = matrix[i][j];
-      } else if (dataPoints >= 2) {
-        // Среднее сглаживание
-        result[i][j] = smoothPoint(matrix, i, j, 1);
-      } else {
-        // Мало данных - сильное сглаживание
-        result[i][j] = smoothPoint(matrix, i, j, 2);
-      }
+      result[i][j] = sum / n;
     }
   }
 
   return result;
-}
-
-function smoothPoint(matrix, i, j, radius) {
-  let sum = 0, n = 0;
-  
-  for (let di = -radius; di <= radius; di++) {
-    for (let dj = -radius; dj <= radius; dj++) {
-      const ni = i + di, nj = j + dj;
-      if (ni >= 0 && ni < matrix.length && nj >= 0 && nj < matrix[0].length) {
-        sum += matrix[ni][nj];
-        n++;
-      }
-    }
-  }
-  
-  return n ? sum / n : matrix[i][j];
 }
 
 // ====== вспомогательные функции ======
 function makeMatrix(r, c, val) {
-  return Array.from({ length: r }, () => Array(c).fill(val));
+  const matrix = [];
+  for (let i = 0; i < r; i++) {
+    matrix.push(Array(c).fill(val));
+  }
+  return matrix;
 }
 
 function clamp(v, min, max) {
@@ -138,7 +96,8 @@ function clamp(v, min, max) {
 }
 
 function limit(v, min, max) {
-  return isNaN(v) ? 1 : Math.min(Math.max(v, min), max);
+  if (isNaN(v)) return 1;
+  return Math.min(Math.max(v, min), max);
 }
 
 function mapRange(v, inMin, inMax, outMin, outMax) {
