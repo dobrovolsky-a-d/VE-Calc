@@ -9,9 +9,7 @@ export function calculateVE(log, veOld) {
     const afr = p.afr;
     const afrTarget = p.afrTarget;
     
-    // ✅✅✅ КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: правильное направление коррекции
-    // Если AFR факт > AFR таргет (бедная смесь) - нужно УВЕЛИЧИВАТЬ VE
-    // Если AFR факт < AFR таргет (богатая смесь) - нужно УМЕНЬШАТЬ VE
+    // ✅ ПРАВИЛЬНОЕ направление коррекции
     const afrCorr = limit(afrTarget / afr, 0.75, 1.25);
     
     const i = clamp(Math.floor(mapRange(p.map, 20, 200, 0, rows - 1)), 0, rows - 1);
@@ -22,7 +20,7 @@ export function calculateVE(log, veOld) {
   });
 
   // --- пересчёт VE ---
-  const veNew = makeMatrix(rows, cols, 0);
+  let veNew = makeMatrix(rows, cols, 0); // Используем let вместо const
   const corrPercent = makeMatrix(rows, cols, 0);
   
   for (let i = 0; i < rows; i++) {
@@ -50,7 +48,7 @@ export function calculateVE(log, veOld) {
 // Новая улучшенная интерполяция
 function interpolateEmptyCells(matrix, count, fallback) {
   const rows = matrix.length, cols = matrix[0].length;
-  const result = matrix.map(row => [...row]);
+  const result = matrix.map(row => [...row]); // Создаем копию
   
   for (let i = 0; i < rows; i++) {
     for (let j = 0; j < cols; j++) {
