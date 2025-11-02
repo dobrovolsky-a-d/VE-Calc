@@ -4,45 +4,59 @@ export async function parseLog(file) {
   
   if (lines.length < 2) throw new Error('Log file is empty or too short');
 
-  const sep = detectSeparator(lines[0]);
+  const sep = ';';
   const headers = lines[0].split(sep).map(h => h.trim().toLowerCase());
 
   console.log('Log headers:', headers);
 
-  // Simple column detection - adjust based on your actual CSV
-  const rpmIndex = headers.findIndex(h => h.includes('rpm'));
-  const mapIndex = headers.findIndex(h => h.includes('map') || h.includes('pressure'));
-  const afrIndex = headers.findIndex(h => h.includes('afr') || h.includes('wideband'));
-  const targetIndex = headers.findIndex(h => h.includes('target'));
+  // Определяем индексы колонок
+  const columnMap = {
+    rpm: headers.findIndex(h => h.includes('engine speed') || h.includes('rpm')),
+    map: headers.findIndex(h => h.includes('manifold absolute pressure') || h.includes('map')),
+    afr: headers.findIndex(h => h.includes('aem uego') || h.includes('afr gasoline') || h.includes('wideband')),
+    afrTarget: headers.findIndex(h => h.includes('fueling final') || h.includes('estimated afr') || h.includes('target'))
+  };
 
-  console.log('Column indices - RPM:', rpmIndex, 'MAP:', mapIndex, 'AFR:', afrIndex, 'Target:', targetIndex);
+  console.log('Column indices:', columnMap);
 
-  if (rpmIndex === -1 || mapIndex === -1 || afrIndex === -1) {
-    throw new Error('Required columns not found. Available: ' + headers.join(', '));
-  }
+  if (columnMap.rpm === -1) throw new Error('RPM column not found');
+  if (columnMap.map === -1) throw new Error('MAP column not found');
+  if (columnMap.afr === -1) throw new Error('AFR column not found');
 
   const out = [];
+  let skipped = 0;
   
   for (let i = 1; i < lines.length; i++) {
     const parts = lines[i].split(sep).map(p => p.trim());
-    if (parts.length < Math.max(rpmIndex, mapIndex, afrIndex) + 1) continue;
+    if (parts.length < Math.max(columnMap.rpm, columnMap.map, columnMap.afr) + 1) {
+      skipped++;
+      continue;
+    }
 
-    const rpm = parseFloat(parts[rpmIndex]);
-    let mapVal = parseFloat(parts[mapIndex]);
-    const afr = parseFloat(parts[afrIndex]);
-    
-    // Auto-detect MAP units
-    if (mapVal < 5) mapVal *= 100; // bar to kPa
-    else if (mapVal > 200) mapVal /= 10; // hPa to kPa
+    // Парсим значения
+    const rpm = parseFloat(parts[columnMap.rpm].replace(',', '.'));
+    const mapValKPA = parseFloat(parts[columnMap.map].replace(',', '.')); // В kPa из лога
+    const afr = parseFloat(parts[columnMap.afr].replace(',', '.'));
 
-    // Basic validation
-    if (isNaN(rpm) || isNaN(mapVal) || isNaN(afr)) continue;
-    if (rpm < 300 || rpm > 8000 || mapVal < 10 || mapVal > 300 || afr < 8 || afr > 22) continue;
+    // Конвертируем kPa в PSI (1 kPa = 0.145038 PSI)
+    const mapValPSI = mapValKPA * 0.145038;
 
-    // AFR target (optional)
+    // Валидация данных
+    if (isNaN(rpm) || isNaN(mapValPSI) || isNaN(afr)) {
+      skipped++;
+      continue;
+    }
+
+    // Фильтруем некорректные данные (теперь в PSI)
+    if (rpm < 300 || rpm > 8000 || mapValPSI < 1 || mapValPSI > 45 || afr < 8 || afr > 22) {
+      skipped++;
+      continue;
+    }
+
+    // AFR target
     let afrTarget = 14.7;
-    if (targetIndex !== -1) {
-      const targetVal = parseFloat(parts[targetIndex]);
+    if (columnMap.afrTarget !== -1) {
+      const targetVal = parseFloat(parts[columnMap.afrTarget].replace(',', '.'));
       if (!isNaN(targetVal) && targetVal >= 8 && targetVal <= 22) {
         afrTarget = targetVal;
       }
@@ -50,7 +64,7 @@ export async function parseLog(file) {
 
     out.push({ 
       rpm: Math.round(rpm), 
-      map: Math.round(mapVal * 10) / 10, 
+      map: Math.round(mapValPSI * 100) / 100, // Теперь в PSI!
       afr: Math.round(afr * 100) / 100, 
       afrTarget: Math.round(afrTarget * 100) / 100 
     });
@@ -58,12 +72,7 @@ export async function parseLog(file) {
 
   if (out.length === 0) throw new Error('No valid data points found after filtering');
 
-  console.log('Successfully parsed', out.length, 'log entries');
+  console.log('Successfully parsed', out.length, 'log entries, skipped:', skipped);
+  console.log('MAP range in log (PSI):', Math.min(...out.map(p => p.map)), '-', Math.max(...out.map(p => p.map)));
   return out;
-}
-
-function detectSeparator(line) {
-  if (line.includes(';')) return ';';
-  if (line.includes('\t')) return '\t';
-  return ',';
 }
