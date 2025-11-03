@@ -1,54 +1,31 @@
-export async function parseVE(file) {
+export async function parseVE(file){
   const text = await file.text();
-  const linesRaw = text.split(/\r?\n/);
-  
-  const lines = linesRaw.map(l => l.trim()).filter(l => l.length > 0);
-  
-  if (lines.length === 0) throw new Error('VE table empty or invalid format');
+  const raw = text.split(/\r?\n/).map(l=>l.trim());
+  const lines = raw.filter(l=>l.length>0 && !/таблица/i.test(l));
+  if(lines.length<2) throw new Error('VE файл не в ожидаемом формате');
 
-  const sep = ';';
-
-  // Parse first line as MAP axis (в PSI)
-  const firstLineParts = lines[0].split(sep).map(c => c.trim()).filter(c => c !== '');
-  
-  // Убираем первый элемент "RPM / MAP (psi)" и парсим MAP значения в PSI
-  const mapAxis = firstLineParts.slice(1).map(item => {
-    const num = parseFloat(item);
-    return isNaN(num) ? null : num;
-  }).filter(item => item !== null);
-
-  console.log('MAP axis (PSI):', mapAxis);
-
-  // Parse data rows
-  const values = [];
-  const rpmAxis = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const parts = lines[i].split(sep).map(p => p.trim());
-    if (parts.length < 2) continue;
-    
-    const rpmCandidate = parseFloat(parts[0]);
-    if (isNaN(rpmCandidate)) continue;
-    
-    const rowVals = parts.slice(1).map(v => parseFloat(v)).filter(v => !isNaN(v));
-    if (rowVals.length > 0) {
-      rpmAxis.push(rpmCandidate);
-      values.push(rowVals);
-    }
+  const sep = lines[0].includes(';')?';':(lines[0].includes('\t')?'\t':',');
+  // первая строка — ось MAP (может иметь ведущую пустую ячейку)
+  const first = lines[0].split(sep).map(s=>s.trim());
+  let mapAxis = first.map(v=>parseFloat(v)).filter(v=>!Number.isNaN(v));
+  if(mapAxis.length===0){
+    // возможно есть ведущая пустая ячейка: удалим первый элемент и повторим
+    const alt = lines[0].split(sep).map(s=>s.trim());
+    if(alt[0]==='') alt.shift();
+    mapAxis = alt.map(v=>parseFloat(v)).filter(v=>!Number.isNaN(v));
   }
 
-  if (values.length === 0) throw new Error('No numeric data found in VE table');
-
-  const rows = values.length;
-  const cols = values[0].length;
-
-  console.log('Parsed VE table:', rows + 'x' + cols, 'RPM:', rpmAxis, 'MAP (PSI):', mapAxis);
-
-  return { 
-    values: values, 
-    rows, 
-    cols, 
-    rpmAxis, 
-    mapAxis 
-  };
+  const values = [];
+  const rpmAxis = [];
+  for(let i=1;i<lines.length;i++){
+    const cols = lines[i].split(sep).map(s=>s.trim());
+    const rpm = parseFloat(cols[0]);
+    if(Number.isNaN(rpm)) continue;
+    const row = cols.slice(1).map(v=>parseFloat(v)).filter(v=>!Number.isNaN(v));
+    if(row.length===0) continue;
+    rpmAxis.push(rpm);
+    values.push(row);
+  }
+  if(values.length===0) throw new Error('Не найдено строк VE');
+  return { values, rows: values.length, cols: values[0].length, rpmAxis, mapAxis };
 }
