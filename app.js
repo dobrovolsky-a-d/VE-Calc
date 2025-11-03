@@ -1,111 +1,123 @@
-import { parseLog } from "./parseLog.js";
-import { parseVE } from "./parseVE.js";
-import { calculateVE } from "./veMath.js";
-import { exportRomRaider } from "./exportRomRaider.js";
+import { parseLog } from './utils/parseLog.js';
+import { parseVE } from './utils/parseVE.js';
+import { calculateVE } from './utils/veMath.js';
+import { exportRomRaider } from './utils/exportRomRaider.js';
 
-let logData = null;
-let veOld = null;
+let logData = [];
+let veOld = {};
 let result = null;
 
-function setStatus(id, html, color) {
-  const el = document.getElementById(id);
-  if (el) { el.innerHTML = html; if (color) el.style.color = color; }
-}
+const statusLog = document.getElementById('statusLog');
+const statusVE = document.getElementById('statusVE');
+const statusCalc = document.getElementById('statusCalc');
+const btnLog = document.getElementById('loadLog');
+const btnVE = document.getElementById('loadVE');
+const btnCalc = document.getElementById('calculate');
+const btnExport = document.getElementById('export');
+const outputDiv = document.getElementById('output');
 
-function setDebug(txt) {
-  const d = document.getElementById('debugLog');
-  if (d) d.textContent = txt;
-}
-
-async function handleLogFile(file) {
-  setStatus('statusLog','⏳ Чтение лога...','var(--muted)');
+btnLog.addEventListener('change', async (e) => {
   try {
-    const parsed = await parseLog(file);
-    logData = parsed;
-    setStatus('statusLog', `✅ Log loaded (${logData.length} valid lines)`, '#7BE495');
-    setDebug(`Detected columns: ${Object.keys(logData[0] || {}).join(', ')}\nSample lines: ${Math.min(5, logData.length)}`);
+    const file = e.target.files[0];
+    if (!file) return;
+    statusLog.textContent = `⏳ Reading log...`;
+
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+    const header = lines[0].split(/[,	;]/).map(h => h.trim());
+    logData = await parseLog(file);
+
+    if (!logData.length) {
+      statusLog.innerHTML = `⚠️ Log loaded but no valid data found.<br>Detected headers: <code>${header.join(', ')}</code>`;
+      statusLog.style.color = 'orange';
+    } else {
+      statusLog.innerHTML = `✅ Log loaded: ${logData.length} lines<br>Detected headers: <code>${header.join(', ')}</code>`;
+      statusLog.style.color = 'limegreen';
+    }
   } catch (err) {
-    setStatus('statusLog', `❌ Ошибка: ${err.message}`, '#ff6b6b');
-    setDebug(err.stack || String(err));
-  }
-}
-
-async function handleVEFile(file) {
-  setStatus('statusVE','⏳ Чтение VE...','var(--muted)');
-  try {
-    const parsed = await parseVE(file);
-    veOld = parsed;
-    setStatus('statusVE', `✅ VE table loaded (${veOld.rows}x${veOld.cols})`, '#7BE495');
-    setDebug((document.getElementById('debugLog').textContent || '') + `\nVE size: ${veOld.rows}x${veOld.cols}`);
-  } catch (err) {
-    setStatus('statusVE', `❌ Ошибка: ${err.message}`, '#ff6b6b');
-    setDebug(err.stack || String(err));
-  }
-}
-
-// support mobile where input change sometimes not fired - listen both change and input
-const logInput = document.getElementById('loadLog');
-const veInput = document.getElementById('loadVE');
-
-logInput.addEventListener('change', (e) => { if(e.target.files[0]) handleLogFile(e.target.files[0]); });
-logInput.addEventListener('input', (e) => { if(e.target.files[0]) handleLogFile(e.target.files[0]); });
-
-veInput.addEventListener('change', (e) => { if(e.target.files[0]) handleVEFile(e.target.files[0]); });
-veInput.addEventListener('input', (e) => { if(e.target.files[0]) handleVEFile(e.target.files[0]); });
-
-document.getElementById('calculate').addEventListener('click', () => {
-  if (!logData || !veOld) {
-    setStatus('statusCalc','⚠️ Загрузите лог и VE таблицу','orange');
-    return;
-  }
-  setStatus('statusCalc','⚙️ Рассчитываем...','var(--muted)');
-  try {
-    result = calculateVE(logData, veOld);
-    setStatus('statusCalc','✅ Расчёт завершён','#7BE495');
-    renderResult(result);
-    const ex = document.getElementById('export');
-    if (ex) { ex.disabled = false; ex.classList.remove('disabled'); }
-  } catch (err) {
-    setStatus('statusCalc',`❌ Ошибка: ${err.message}`,'#ff6b6b');
-    setDebug(err.stack || String(err));
+    statusLog.textContent = `❌ Error reading log: ${err.message}`;
+    statusLog.style.color = 'red';
   }
 });
 
-document.getElementById('export').addEventListener('click', () => {
-  if (!result || !result.VE_new) {
-    setStatus('statusCalc','⚠️ Нет данных для экспорта','orange');
+btnVE.addEventListener('change', async (e) => {
+  try {
+    const file = e.target.files[0];
+    if (!file) return;
+    statusVE.textContent = `⏳ Reading VE table...`;
+
+    veOld = await parseVE(file);
+
+    if (!veOld.values || !veOld.values.length) {
+      statusVE.textContent = `⚠️ VE table loaded but no numeric data found`;
+      statusVE.style.color = 'orange';
+    } else {
+      statusVE.textContent = `✅ VE table loaded: ${veOld.rows}x${veOld.cols}`;
+      statusVE.style.color = 'limegreen';
+    }
+  } catch (err) {
+    statusVE.textContent = `❌ Error reading VE table: ${err.message}`;
+    statusVE.style.color = 'red';
+  }
+});
+
+btnCalc.addEventListener('click', () => {
+  try {
+    if (!logData.length || !veOld.values) {
+      throw new Error('Missing log or VE table');
+    }
+
+    statusCalc.textContent = '⚙️ Calculating...';
+    statusCalc.style.color = 'orange';
+    outputDiv.innerHTML = '';
+
+    result = calculateVE(logData, veOld);
+    if (!result || !result.VE_new) throw new Error('Calculation failed');
+
+    const filledCells = result.VE_new.flat().filter(v => v !== 0).length;
+    statusCalc.textContent = `✅ Calculation complete (${filledCells} cells updated)`;
+    statusCalc.style.color = 'limegreen';
+
+    showTables(result);
+  } catch (err) {
+    statusCalc.textContent = `❌ Error: ${err.message}`;
+    statusCalc.style.color = 'red';
+  }
+});
+
+btnExport.addEventListener('click', () => {
+  if (!result) {
+    alert('No data to export. Please calculate VE first.');
     return;
   }
   exportRomRaider(result.VE_new);
-  setStatus('statusCalc','✅ Экспортирован VE_new.csv','#7BE495');
 });
 
-function renderResult(data) {
-  const out = document.getElementById('output');
-  out.innerHTML = '';
-  const sections = [
-    {title:'Original VE', matrix: data.VE_old},
-    {title:'Correction (%)', matrix: data.Correction},
-    {title:'Smoothed VE', matrix: data.VE_new}
-  ];
-  sections.forEach(s => {
-    const card = document.createElement('div');
-    card.className = 'card';
-    const h = document.createElement('h3');
-    h.textContent = s.title;
-    card.appendChild(h);
-    const table = document.createElement('table');
-    table.className = 've-table';
-    s.matrix.forEach(row => {
-      const tr = document.createElement('tr');
-      row.forEach(cell => {
-        const td = document.createElement('td');
-        td.textContent = (typeof cell === 'number') ? cell.toFixed(2) : cell;
-        tr.appendChild(td);
-      });
-      table.appendChild(tr);
+function showTables(result) {
+  outputDiv.innerHTML = `
+    <h3>Old VE</h3>
+    ${renderTable(result.VE_old)}
+    <h3>New VE (smoothed)</h3>
+    ${renderTable(result.VE_new)}
+    <h3>Correction %</h3>
+    ${renderTable(result.Correction, true)}
+  `;
+}
+
+function renderTable(matrix, isCorr = false) {
+  let html = '<table class="ve-table">';
+  matrix.forEach(row => {
+    html += '<tr>';
+    row.forEach(val => {
+      let color = '';
+      if (isCorr) {
+        if (val > 2) color = 'style="background:#3366ff33"';
+        else if (val < -2) color = 'style="background:#ff333333"';
+      }
+      html += `<td ${color}>${isNaN(val) ? '' : val.toFixed(2)}</td>`;
     });
-    card.appendChild(table);
-    out.appendChild(card);
+    html += '</tr>';
   });
+  html += '</table>';
+  return html;
 }
