@@ -3,47 +3,43 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>VE Calculator v1.1</title>
+<title>VE Calc — Simple</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app-container">
-    <header class="header">
-      <h1 class="logo">VE Calculator <span class="ver">v1.1</span></h1>
-      <p class="subtitle">Лёгкий VE-калькулятор — стиль как у Log Reader</p>
+  <div class="wrap">
+    <header>
+      <h1>VE Calc — Simple</h1>
+      <p class="muted">Простая надёжная версия. VE_new = VE_old × (AFR_actual / AFR_target)</p>
     </header>
 
-    <main class="main">
-      <section class="upload">
-        <div class="card">
-          <label class="lbl">📄 Загрузить лог-файл</label>
-          <input id="loadLog" type="file" accept=".csv,.txt" />
-          <div id="statusLog" class="status">Не загружено</div>
-        </div>
+    <section class="controls">
+      <div class="row">
+        <label>Загрузить лог (CSV/TXT): <input id="loadLog" type="file" accept=".csv,.txt" /></label>
+      </div>
+      <div class="row">
+        <label>Загрузить VE таблицу (CSV): <input id="loadVE" type="file" accept=".csv,.txt" /></label>
+      </div>
 
-        <div class="card">
-          <label class="lbl">📊 Загрузить VE таблицу</label>
-          <input id="loadVE" type="file" accept=".csv,.txt,.xlsx" />
-          <div id="statusVE" class="status">Не загружено</div>
-        </div>
+      <div class="row options">
+        <label>Мин коррекция (%) <input id="minCorr" type="number" value="75" min="10" max="200"/></label>
+        <label>Макс коррекция (%) <input id="maxCorr" type="number" value="125" min="100" max="400"/></label>
+        <label>Min RPM <input id="minRpm" type="number" value="800" /></label>
+        <label>Max RPM <input id="maxRpm" type="number" value="7000" /></label>
+      </div>
 
-        <div class="actions">
-          <button id="calculate" class="btn primary">▶ Рассчитать VE</button>
-          <button id="export" class="btn" disabled>💾 Экспорт CSV</button>
-        </div>
+      <div class="row">
+        <button id="calc">Рассчитать VE</button>
+        <button id="export" disabled>Экспорт VE_new.csv</button>
+      </div>
 
-        <div id="statusCalc" class="status calc-status">Ожидание</div>
-      </section>
+      <div id="status" class="status">Ожидание загрузки файлов</div>
+      <div id="debug" class="debug">Отладка: —</div>
+    </section>
 
-      <section id="debug-section" class="card debug-section">
-        <h3>🧠 Отладка</h3>
-        <div id="debugLog" class="debugbox">Ожидание загрузки...</div>
-      </section>
+    <section id="output" class="output"></section>
 
-      <section id="output" class="card output"></section>
-    </main>
-
-    <footer class="footer">Made for quick VE tuning — compatible with your Log Reader styles</footer>
+    <footer class="muted">Simple VE Calc — minimal, auditable, correct</footer>
   </div>
 
 <script type="module" src="./app.js"></script>
