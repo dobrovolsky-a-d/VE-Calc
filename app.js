@@ -7,87 +7,105 @@ let logData = null;
 let veOld = null;
 let result = null;
 
-const statusEl = document.getElementById('status');
-const debugEl = document.getElementById('debug');
-const outEl = document.getElementById('output');
+function setStatus(id, html, color) {
+  const el = document.getElementById(id);
+  if (el) { el.innerHTML = html; if (color) el.style.color = color; }
+}
 
-function setStatus(t){ statusEl.textContent = t; }
-function setDebug(t){ debugEl.textContent = t; }
+function setDebug(txt) {
+  const d = document.getElementById('debugLog');
+  if (d) d.textContent = txt;
+}
 
-document.getElementById('loadLog').addEventListener('change', async (e)=>{
-  const f = e.target.files && e.target.files[0];
-  if(!f) return;
-  setStatus('Чтение лога...');
-  try{
-    logData = await parseLog(f);
-    setStatus(`Log загружен: ${logData.length} строк`);
-    setDebug(`Колонки: ${logData.length?Object.keys(logData[0]).join(', '):'—'}`);
-  }catch(err){
-    setStatus('Ошибка чтения лога');
-    setDebug(String(err));
-    logData = null;
+async function handleLogFile(file) {
+  setStatus('statusLog','⏳ Чтение лога...','var(--muted)');
+  try {
+    const parsed = await parseLog(file);
+    logData = parsed;
+    setStatus('statusLog', `✅ Log loaded (${logData.length} valid lines)`, '#7BE495');
+    setDebug(`Detected columns: ${Object.keys(logData[0] || {}).join(', ')}\nSample lines: ${Math.min(5, logData.length)}`);
+  } catch (err) {
+    setStatus('statusLog', `❌ Ошибка: ${err.message}`, '#ff6b6b');
+    setDebug(err.stack || String(err));
   }
-});
+}
 
-document.getElementById('loadVE').addEventListener('change', async (e)=>{
-  const f = e.target.files && e.target.files[0];
-  if(!f) return;
-  setStatus('Чтение VE таблицы...');
-  try{
-    veOld = await parseVE(f);
-    setStatus(`VE загружена: ${veOld.rows}×${veOld.cols}`);
-    setDebug(`RPM axis: ${veOld.rpmAxis?.slice(0,3).join(', ')} ... MAP axis: ${veOld.mapAxis?.slice(0,3).join(', ')}`);
-  }catch(err){
-    setStatus('Ошибка чтения VE');
-    setDebug(String(err));
-    veOld = null;
+async function handleVEFile(file) {
+  setStatus('statusVE','⏳ Чтение VE...','var(--muted)');
+  try {
+    const parsed = await parseVE(file);
+    veOld = parsed;
+    setStatus('statusVE', `✅ VE table loaded (${veOld.rows}x${veOld.cols})`, '#7BE495');
+    setDebug((document.getElementById('debugLog').textContent || '') + `\nVE size: ${veOld.rows}x${veOld.cols}`);
+  } catch (err) {
+    setStatus('statusVE', `❌ Ошибка: ${err.message}`, '#ff6b6b');
+    setDebug(err.stack || String(err));
   }
-});
+}
 
-document.getElementById('calc').addEventListener('click', ()=>{
-  if(!logData || !veOld){ setStatus('Нужно загрузить лог и VE'); return; }
-  // read options
-  const minC = Number(document.getElementById('minCorr').value)/100;
-  const maxC = Number(document.getElementById('maxCorr').value)/100;
-  const minRPM = Number(document.getElementById('minRpm').value);
-  const maxRPM = Number(document.getElementById('maxRpm').value);
+// support mobile where input change sometimes not fired - listen both change and input
+const logInput = document.getElementById('loadLog');
+const veInput = document.getElementById('loadVE');
 
-  setStatus('Вычисляем...');
-  try{
-    result = calculateVE(logData, veOld, { minCorr, maxCorr, minRPM, maxRPM });
-    setStatus('Готово — показаны таблицы ниже');
+logInput.addEventListener('change', (e) => { if(e.target.files[0]) handleLogFile(e.target.files[0]); });
+logInput.addEventListener('input', (e) => { if(e.target.files[0]) handleLogFile(e.target.files[0]); });
+
+veInput.addEventListener('change', (e) => { if(e.target.files[0]) handleVEFile(e.target.files[0]); });
+veInput.addEventListener('input', (e) => { if(e.target.files[0]) handleVEFile(e.target.files[0]); });
+
+document.getElementById('calculate').addEventListener('click', () => {
+  if (!logData || !veOld) {
+    setStatus('statusCalc','⚠️ Загрузите лог и VE таблицу','orange');
+    return;
+  }
+  setStatus('statusCalc','⚙️ Рассчитываем...','var(--muted)');
+  try {
+    result = calculateVE(logData, veOld);
+    setStatus('statusCalc','✅ Расчёт завершён','#7BE495');
     renderResult(result);
-    document.getElementById('export').disabled = false;
-    setDebug(`Средний коэффициент (без лимита): ${result.avgFactor?.toFixed(3) || '—'}`);
-  }catch(err){
-    setStatus('Ошибка расчёта');
-    setDebug(String(err));
+    const ex = document.getElementById('export');
+    if (ex) { ex.disabled = false; ex.classList.remove('disabled'); }
+  } catch (err) {
+    setStatus('statusCalc',`❌ Ошибка: ${err.message}`,'#ff6b6b');
+    setDebug(err.stack || String(err));
   }
 });
 
-document.getElementById('export').addEventListener('click', ()=>{
-  if(!result) return;
+document.getElementById('export').addEventListener('click', () => {
+  if (!result || !result.VE_new) {
+    setStatus('statusCalc','⚠️ Нет данных для экспорта','orange');
+    return;
+  }
   exportRomRaider(result.VE_new);
-  setStatus('Экспорт выполнен');
+  setStatus('statusCalc','✅ Экспортирован VE_new.csv','#7BE495');
 });
 
-function renderResult(data){
-  outEl.innerHTML = '';
-  const addTable = (title, m) => {
-    const h = document.createElement('h3'); h.textContent = title; outEl.appendChild(h);
+function renderResult(data) {
+  const out = document.getElementById('output');
+  out.innerHTML = '';
+  const sections = [
+    {title:'Original VE', matrix: data.VE_old},
+    {title:'Correction (%)', matrix: data.Correction},
+    {title:'Smoothed VE', matrix: data.VE_new}
+  ];
+  sections.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const h = document.createElement('h3');
+    h.textContent = s.title;
+    card.appendChild(h);
     const table = document.createElement('table');
-    m.forEach(row=>{
+    table.className = 've-table';
+    s.matrix.forEach(row => {
       const tr = document.createElement('tr');
-      row.forEach(cell=>{
+      row.forEach(cell => {
         const td = document.createElement('td');
-        td.textContent = (typeof cell === 'number')?cell.toFixed(2):cell;
+        td.textContent = (typeof cell === 'number') ? cell.toFixed(2) : cell;
         tr.appendChild(td);
       });
       table.appendChild(tr);
     });
-    outEl.appendChild(table);
-  };
-  addTable('Original VE', data.VE_old);
-  addTable('Correction %', data.Correction);
-  addTable('New VE (smoothed)', data.VE_new);
+    card.appendChild(table);
+    out.appendChild(card);
+  });
 }
