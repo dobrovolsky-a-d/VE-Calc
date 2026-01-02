@@ -2,14 +2,13 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VE Calculator</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div class="app">
-
   <h1>VE Calculator</h1>
 
   <section>
@@ -17,12 +16,12 @@
 
     <label>
       Log file
-      <input type="file" id="loadLog">
+      <input type="file" id="loadLog" accept=".csv,.txt">
     </label>
 
     <label>
       VE table
-      <input type="file" id="loadVE">
+      <input type="file" id="loadVE" accept=".csv,.txt">
     </label>
   </section>
 
@@ -40,7 +39,6 @@
   <section>
     <button id="export" disabled>Export VE_new.csv</button>
   </section>
-
 </div>
 
 <script type="module" src="app.js"></script>
