@@ -61,15 +61,26 @@ exportBtn.addEventListener("click", () => {
   exportRomRaider(result.VE_new);
 });
 
-function renderTable(matrix) {
+function renderTables(result) {
   output.innerHTML = "";
+
+  addTable("Original VE", result.VE_old);
+  addTable("Correction %", result.Correction);
+  addTable("New VE", result.VE_new);
+}
+
+function addTable(title, matrix) {
+  const h = document.createElement("h3");
+  h.textContent = title;
+  output.appendChild(h);
+
   const table = document.createElement("table");
 
   matrix.forEach(row => {
     const tr = document.createElement("tr");
     row.forEach(v => {
       const td = document.createElement("td");
-      td.textContent = v.toFixed(2);
+      td.textContent = Number(v).toFixed(2);
       tr.appendChild(td);
     });
     table.appendChild(tr);
