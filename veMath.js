@@ -33,18 +33,19 @@ export function calculateVE(log, veOld) {
 
   const veSmooth = smooth(veNew);
 
-  return {
-    VE_new: veSmooth,
-    Correction: corr,
-    stats: {
-      veRows: rows,
-      veCols: cols,
-      veCells: rows * cols,
-      logRows: log.length,
-      validLogRows,
-      usedCells: usedCells.size
-    }
-  };
+return {
+  VE_old: veOld.values,
+  VE_new: veSmooth,
+  Correction: corr,
+  stats: {
+    veRows: rows,
+    veCols: cols,
+    veCells: rows * cols,
+    logRows: log.length,
+    validLogRows,
+    usedCells: usedCells.size
+  }
+};
 }
 
 function map(v, a, b, c, d) { return (v - a) * (d - c) / (b - a) + c; }
