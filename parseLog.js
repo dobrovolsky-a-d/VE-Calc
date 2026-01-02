@@ -1,26 +1,29 @@
 export async function parseLog(file) {
   const text = await file.text();
-  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-  const header = lines[0].split(/[,	;]/).map(h => h.trim().toLowerCase());
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+
+  const sep = lines[0].includes(";") ? ";" : ",";
+  const headers = lines[0].toLowerCase().split(sep);
+
+  const idxRPM = headers.findIndex(h => h.includes("rpm"));
+  const idxMAP = headers.findIndex(h => h.includes("psi"));
+  const idxAFR = headers.findIndex(h => h.includes("afr"));
+  const idxTarget = headers.findIndex(h => h.includes("target"));
+
+  if (idxRPM < 0 || idxMAP < 0 || idxAFR < 0 || idxTarget < 0)
+    throw new Error("Missing required columns");
+
   const data = [];
 
-  lines.slice(1).forEach(line => {
-    const parts = line.split(/[,	;]/);
-    const entry = {};
-    header.forEach((h, i) => {
-      const val = parseFloat(parts[i]);
-      entry[h] = isNaN(val) ? parts[i] : val;
-    });
-
-    const rpm = entry['rpm'] ?? entry['engine speed (rpm)'] ?? entry['engine speed'];
-    const map = entry['manifold pressure'] ?? entry['map (kpa)'] ?? entry['map'];
-    const afrActual = entry['afr actual'] ?? entry['wideband afr'] ?? entry['afr'];
-    const afrTarget = entry['afr target'] ?? entry['commanded afr'] ?? entry['target afr'];
-
-    if (rpm && map && afrActual && afrTarget) {
-      data.push({ rpm: +rpm, map: +map, afrActual: +afrActual, afrTarget: +afrTarget });
-    }
-  });
+  for (let i = 1; i < lines.length; i++) {
+    const c = lines[i].split(sep);
+    const rpm = parseFloat(c[idxRPM]);
+    const map = parseFloat(c[idxMAP]);
+    const afr = parseFloat(c[idxAFR]);
+    const afrTarget = parseFloat(c[idxTarget]);
+    if ([rpm, map, afr, afrTarget].some(isNaN)) continue;
+    data.push({ rpm, map, afr, afrTarget });
+  }
 
   return data;
 }
