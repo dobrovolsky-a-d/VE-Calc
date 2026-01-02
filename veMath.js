@@ -3,6 +3,9 @@ export function calculateVE(log, veOld) {
   const corrSum = makeMatrix(rows, cols, 0);
   const count = makeMatrix(rows, cols, 0);
 
+  const usedCells = new Set();
+let validLogRows = 0;
+
   log.forEach(p => {
     if (!p.afrActual || !p.afrTarget) return;
 
