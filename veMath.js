@@ -1,69 +1,63 @@
 export function calculateVE(log, veOld) {
-  const rows = veOld.rows, cols = veOld.cols;
-  const corrSum = makeMatrix(rows, cols, 0);
-  const count = makeMatrix(rows, cols, 0);
+  const rows = veOld.rows;
+  const cols = veOld.cols;
 
+  const sum = Array.from({ length: rows }, () => Array(cols).fill(0));
+  const cnt = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+  let validLogRows = 0;
   const usedCells = new Set();
-let validLogRows = 0;
 
   log.forEach(p => {
-    if (!p.afrActual || !p.afrTarget) return;
+    const factor = clamp(p.afr / p.afrTarget, 0.85, 1.15);
 
-    // ✔️ правильная формула
-    let afrCorr = p.afrActual / p.afrTarget;
+    const i = clamp(Math.floor(map(p.map, 0, 40, 0, rows - 1)), 0, rows - 1);
+    const j = clamp(Math.floor(map(p.rpm, 800, 7000, 0, cols - 1)), 0, cols - 1);
 
-    // ✔️ мягкие лимиты
-    afrCorr = limit(afrCorr, 0.85, 1.15);
-
-    // ✔️ мы в PSI, не KPA
-    const i = clamp(Math.floor(mapRange(p.map, 0, 40, 0, rows - 1)), 0, rows - 1);
-    const j = clamp(Math.floor(mapRange(p.rpm, 800, 7000, 0, cols - 1)), 0, cols - 1);
-
-    corrSum[i][j] += afrCorr;
-    count[i][j]++;
+    sum[i][j] += factor;
+    cnt[i][j]++;
+    validLogRows++;
+    usedCells.add(`${i}:${j}`);
   });
 
-  const veNew = makeMatrix(rows, cols, 0);
-  const corrPercent = makeMatrix(rows, cols, 0);
+  const veNew = Array.from({ length: rows }, () => Array(cols).fill(0));
+  const corr = Array.from({ length: rows }, () => Array(cols).fill(0));
 
   for (let i = 0; i < rows; i++) {
     for (let j = 0; j < cols; j++) {
-      const avg = count[i][j] ? corrSum[i][j] / count[i][j] : 1;
-      veNew[i][j] = (veOld.values[i][j] || 0) * avg;
-      corrPercent[i][j] = (avg - 1) * 100;
+      const avg = cnt[i][j] ? sum[i][j] / cnt[i][j] : 1;
+      veNew[i][j] = veOld.values[i][j] * avg;
+      corr[i][j] = (avg - 1) * 100;
     }
   }
 
-  // только сглаживание, без интерполяции
-  const veSmooth = smoothMatrix(veNew, 3);
+  const veSmooth = smooth(veNew);
 
   return {
-    VE_old: veOld.values,
     VE_new: veSmooth,
-    Correction: corrPercent
+    Correction: corr,
+    stats: {
+      veRows: rows,
+      veCols: cols,
+      veCells: rows * cols,
+      logRows: log.length,
+      validLogRows,
+      usedCells: usedCells.size
+    }
   };
 }
 
-function makeMatrix(r,c,val){return Array.from({length:r},()=>Array(c).fill(val));}
-function clamp(v,min,max){return Math.min(Math.max(v,min),max);}
-function limit(v,min,max){return isNaN(v)?1:Math.min(Math.max(v,min),max);}
-function mapRange(v,inMin,inMax,outMin,outMax){
-  return (v-inMin)*(outMax-outMin)/(inMax-inMin)+outMin;
-}
-function smoothMatrix(matrix,size){
-  const r=matrix.length,c=matrix[0].length,half=Math.floor(size/2);
-  const res=makeMatrix(r,c,0);
-  for(let i=0;i<r;i++){
-    for(let j=0;j<c;j++){
-      let sum=0,n=0;
-      for(let di=-half;di<=half;di++){
-        for(let dj=-half;dj<=half;dj++){
-          const ni=i+di,nj=j+dj;
-          if(ni>=0&&ni<r&&nj>=0&&nj<c){sum+=matrix[ni][nj];n++;}
-        }
-      }
-      res[i][j]=n?sum/n:matrix[i][j];
-    }
-  }
-  return res;
+function map(v, a, b, c, d) { return (v - a) * (d - c) / (b - a) + c; }
+function clamp(v, min, max) { return Math.min(Math.max(v, min), max); }
+
+function smooth(m) {
+  const r = m.length, c = m[0].length;
+  const o = JSON.parse(JSON.stringify(m));
+  for (let i = 1; i < r - 1; i++)
+    for (let j = 1; j < c - 1; j++)
+      o[i][j] = (
+        m[i][j] + m[i-1][j] + m[i+1][j] +
+        m[i][j-1] + m[i][j+1]
+      ) / 5;
+  return o;
 }
