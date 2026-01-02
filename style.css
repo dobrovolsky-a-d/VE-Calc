@@ -1,6 +1,4 @@
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
@@ -15,20 +13,10 @@ body {
   padding: 24px;
 }
 
-h1 {
-  margin-bottom: 24px;
-  font-size: 28px;
-}
+h1 { font-size: 28px; margin-bottom: 24px; }
+h2 { font-size: 15px; margin-bottom: 10px; color: #374151; }
 
-section {
-  margin-bottom: 28px;
-}
-
-h2 {
-  margin-bottom: 12px;
-  font-size: 16px;
-  color: #374151;
-}
+section { margin-bottom: 28px; }
 
 label {
   display: block;
@@ -46,7 +34,7 @@ button {
   font-size: 14px;
   border: none;
   background: #2563eb;
-  color: white;
+  color: #fff;
   cursor: pointer;
 }
 
@@ -60,4 +48,15 @@ pre {
   padding: 12px;
   font-size: 13px;
   overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  font-family: monospace;
+}
+
+td {
+  border: 1px solid #d1d5db;
+  padding: 6px;
+  text-align: right;
 }
