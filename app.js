@@ -3,59 +3,115 @@ import { parseVE } from "./parseVE.js";
 import { calculateVE } from "./veMath.js";
 import { exportRomRaider } from "./exportRomRaider.js";
 
-let logData=null, veOld=null, result=null;
-const debug=document.getElementById("debug");
-const output=document.getElementById("output");
-const exportBtn=document.getElementById("export");
+let logData = null;
+let veOld = null;
+let result = null;
 
-document.getElementById("loadLog").addEventListener("change", async e=>{
-  try{
-    logData=await parseLog(e.target.files[0]);
-    debug.textContent=`Log loaded\nRows: ${logData.length}`;
-  }catch(err){debug.textContent=err.message;}
-});
+const debug = document.getElementById("debug");
+const output = document.getElementById("output");
+const exportBtn = document.getElementById("export");
 
-document.getElementById("loadVE").addEventListener("change", async e=>{
-  try{
-    veOld=await parseVE(e.target.files[0]);
-    debug.textContent=`VE loaded\nRows:${veOld.rows}\nCols:${veOld.cols}\nCells:${veOld.rows*veOld.cols}`;
-  }catch(err){debug.textContent=err.message;}
-});
-
-document.getElementById("calculate").addEventListener("click",()=>{
-  if(!logData||!veOld){debug.textContent="Load files first";return;}
-  result=calculateVE(logData,veOld);
-  render(result);
-  exportBtn.disabled=false;
-  const s=result.stats;
-  debug.textContent=
-`VE:
-Rows:${s.veRows} Cols:${s.veCols} Cells:${s.veCells}
-LOG:
-Rows:${s.logRows}
-Valid:${s.validLogRows}
-Used cells:${s.usedCells}`;
-});
-
-exportBtn.addEventListener("click",()=>exportRomRaider(result.VE_new));
-
-function render(r){
-  output.innerHTML="";
-  add("Original VE",r.VE_old);
-  add("Correction %",r.Correction);
-  add("New VE",r.VE_new);
+function setDebug(text) {
+  debug.textContent = text;
 }
 
-function add(title,m){
-  const h=document.createElement("h3");h.textContent=title;output.appendChild(h);
-  const t=document.createElement("table");
-  m.forEach(row=>{
-    const tr=document.createElement("tr");
-    row.forEach(v=>{
-      const td=document.createElement("td");
-      td.textContent=Number(v).toFixed(2);
+// -------- LOAD LOG --------
+document.getElementById("loadLog").addEventListener("change", async (e) => {
+  try {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    logData = await parseLog(file);
+    setDebug(
+      `Log loaded
+Rows: ${logData.length}`
+    );
+  } catch (err) {
+    setDebug("Log error:\n" + err.message);
+    logData = null;
+  }
+});
+
+// -------- LOAD VE --------
+document.getElementById("loadVE").addEventListener("change", async (e) => {
+  try {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    veOld = await parseVE(file);
+    setDebug(
+      `VE loaded
+Rows: ${veOld.rows}
+Cols: ${veOld.cols}
+Cells: ${veOld.rows * veOld.cols}`
+    );
+  } catch (err) {
+    setDebug("VE error:\n" + err.message);
+    veOld = null;
+  }
+});
+
+// -------- CALCULATE --------
+document.getElementById("calculate").addEventListener("click", () => {
+  if (!logData || !veOld) {
+    setDebug("Load log and VE table first");
+    return;
+  }
+
+  try {
+    result = calculateVE(logData, veOld);
+    renderResult(result);
+
+    exportBtn.disabled = false;
+
+    const s = result.stats;
+    setDebug(
+      `VE TABLE:
+Rows: ${s.veRows}
+Cols: ${s.veCols}
+Cells: ${s.veCells}
+
+LOG:
+Total rows: ${s.logRows}
+Valid rows: ${s.validLogRows}
+Used VE cells: ${s.usedCells}`
+    );
+  } catch (err) {
+    setDebug("Calculation error:\n" + err.message);
+  }
+});
+
+// -------- EXPORT --------
+exportBtn.addEventListener("click", () => {
+  if (!result) return;
+  exportRomRaider(result.VE_new);
+});
+
+// -------- RENDER --------
+function renderResult(res) {
+  output.innerHTML = "";
+
+  renderTable("Original VE", res.VE_old);
+  renderTable("Correction %", res.Correction);
+  renderTable("New VE", res.VE_new);
+}
+
+function renderTable(title, matrix) {
+  const h = document.createElement("h3");
+  h.textContent = title;
+  output.appendChild(h);
+
+  const table = document.createElement("table");
+
+  matrix.forEach(row => {
+    const tr = document.createElement("tr");
+    row.forEach(val => {
+      const td = document.createElement("td");
+      td.textContent = Number(val).toFixed(2);
       tr.appendChild(td);
     });
-    t.appendChild(tr);
+    table.appendChild(tr);
   });
-  output.appe
+
+  output.appendChild(table);
+}
