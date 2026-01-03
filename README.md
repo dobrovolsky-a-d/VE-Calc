@@ -5,9 +5,10 @@ REQUIRED LOG PARAMETERS:
 - Manifold Absolute Pressure (PSI)
 - Wideband AFR (Actual)
 - Target AFR
+- - Throttle Position (%)
 
 RECOMMENDED:
-- Throttle Position (%)
+
 - Injector Duty Cycle (%)
 - Intake Air Temperature
 
