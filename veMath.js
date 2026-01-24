@@ -3,7 +3,6 @@
 // Без интерполяции
 // Без transient-фильтров
 // Только правильная формула + сглаживание
-
 export function calculateVE(log, veOld) {
   const rows = veOld.rows;
   const cols = veOld.cols;
@@ -15,12 +14,8 @@ export function calculateVE(log, veOld) {
   const usedCells = new Set();
 
   log.forEach(p => {
-    if (!p.afr || !p.afrTarget) return;
-
-    // Правильная формула:
-    // богатая смесь (AFR < target) -> VE уменьшаем
     let factor = p.afr / p.afrTarget;
-    factor = clamp(factor, 0.85, 1.15);
+    factor = clamp(factor, 0.75, 1.25); // ±25%
 
     const i = clamp(Math.floor(mapRange(p.map, 0, 40, 0, rows - 1)), 0, rows - 1);
     const j = clamp(Math.floor(mapRange(p.rpm, 800, 7000, 0, cols - 1)), 0, cols - 1);
@@ -50,14 +45,11 @@ export function calculateVE(log, veOld) {
       veRows: rows,
       veCols: cols,
       veCells: rows * cols,
-      logRows: log.length,
       validLogRows,
       usedCells: usedCells.size
     }
   };
 }
-
-// ---------- helpers ----------
 
 function clamp(v, min, max) {
   return Math.min(Math.max(v, min), max);
@@ -83,6 +75,5 @@ function smooth(m) {
       ) / 5;
     }
   }
-
   return out;
 }
