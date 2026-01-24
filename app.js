@@ -15,30 +15,20 @@ function setDebug(text) {
   debug.textContent = text;
 }
 
-// -------- LOAD LOG --------
 document.getElementById("loadLog").addEventListener("change", async (e) => {
   try {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    logData = await parseLog(file);
-    setDebug(
-      `Log loaded
-Rows: ${logData.length}`
-    );
+    const tpsCutoff = parseFloat(document.getElementById("tpsCutoff").value);
+    logData = await parseLog(e.target.files[0], tpsCutoff);
+    setDebug(`Log loaded\nRows after filtering: ${logData.length}`);
   } catch (err) {
     setDebug("Log error:\n" + err.message);
     logData = null;
   }
 });
 
-// -------- LOAD VE --------
 document.getElementById("loadVE").addEventListener("change", async (e) => {
   try {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    veOld = await parseVE(file);
+    veOld = await parseVE(e.target.files[0]);
     setDebug(
       `VE loaded
 Rows: ${veOld.rows}
@@ -51,46 +41,35 @@ Cells: ${veOld.rows * veOld.cols}`
   }
 });
 
-// -------- CALCULATE --------
 document.getElementById("calculate").addEventListener("click", () => {
   if (!logData || !veOld) {
     setDebug("Load log and VE table first");
     return;
   }
 
-  try {
-    result = calculateVE(logData, veOld);
-    renderResult(result);
+  result = calculateVE(logData, veOld);
+  renderResult(result);
+  exportBtn.disabled = false;
 
-    exportBtn.disabled = false;
-
-    const s = result.stats;
-    setDebug(
-      `VE TABLE:
+  const s = result.stats;
+  setDebug(
+`VE TABLE:
 Rows: ${s.veRows}
 Cols: ${s.veCols}
 Cells: ${s.veCells}
 
 LOG:
-Total rows: ${s.logRows}
-Valid rows: ${s.validLogRows}
+Rows used: ${s.validLogRows}
 Used VE cells: ${s.usedCells}`
-    );
-  } catch (err) {
-    setDebug("Calculation error:\n" + err.message);
-  }
+  );
 });
 
-// -------- EXPORT --------
 exportBtn.addEventListener("click", () => {
-  if (!result) return;
-  exportRomRaider(result.VE_new);
+  if (result) exportRomRaider(result.VE_new);
 });
 
-// -------- RENDER --------
 function renderResult(res) {
   output.innerHTML = "";
-
   renderTable("Original VE", res.VE_old);
   renderTable("Correction %", res.Correction);
   renderTable("New VE", res.VE_new);
@@ -102,16 +81,14 @@ function renderTable(title, matrix) {
   output.appendChild(h);
 
   const table = document.createElement("table");
-
   matrix.forEach(row => {
     const tr = document.createElement("tr");
-    row.forEach(val => {
+    row.forEach(v => {
       const td = document.createElement("td");
-      td.textContent = Number(val).toFixed(2);
+      td.textContent = Number(v).toFixed(2);
       tr.appendChild(td);
     });
     table.appendChild(tr);
   });
-
   output.appendChild(table);
 }
