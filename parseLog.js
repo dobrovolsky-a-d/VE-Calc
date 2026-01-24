@@ -1,22 +1,63 @@
-export async function parseLog(file){
-  const text=await file.text();
-  const lines=text.split(/\r?\n/).filter(l=>l.trim());
-  const sep=lines[0].includes(";")?";":",";
-  const h=lines[0].toLowerCase().split(sep);
+// parseLog.js
+// Парсер под реальные RomRaider логи
+// MAP в bar -> конвертируем в psi
+// Никаких фильтров, только нормализация данных
 
-  const r=h.findIndex(v=>v.includes("rpm"));
-  const m=h.findIndex(v=>v.includes("psi"));
-  const a=h.findIndex(v=>v.includes("afr")&&!v.includes("target"));
-  const t=h.findIndex(v=>v.includes("target"));
-
-  if(r<0||m<0||a<0||t<0) throw Error("Missing required columns");
-
-  const out=[];
-  for(let i=1;i<lines.length;i++){
-    const c=lines[i].split(sep);
-    const rpm=+c[r], map=+c[m], afr=+c[a], afrTarget=+c[t];
-    if([rpm,map,afr,afrTarget].some(isNaN)) continue;
-    out.push({rpm,map,afr,afrTarget});
+export async function parseLog(file) {
+  const text = await file.text();
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) {
+    throw new Error("Log file is empty or invalid");
   }
+
+  const sep = lines[0].includes(";") ? ";" : ",";
+  const headers = lines[0].split(sep).map(h => h.trim());
+
+  const idxRPM = headers.findIndex(h => h.includes("Engine Speed"));
+  const idxMAP = headers.findIndex(h => h.includes("Manifold Absolute Pressure"));
+  const idxAFR = headers.findIndex(h => h.includes("AEM UEGO"));
+  const idxTarget = headers.findIndex(h => h.includes("Primary Open Loop"));
+  const idxTPS = headers.findIndex(h => h.includes("Throttle Opening"));
+
+  if (idxRPM < 0 || idxMAP < 0 || idxAFR < 0 || idxTarget < 0 || idxTPS < 0) {
+    throw new Error(
+      "Missing required columns.\n" +
+      "Required:\n" +
+      "- Engine Speed (rpm)\n" +
+      "- Manifold Absolute Pressure (bar)\n" +
+      "- AEM UEGO Wideband (AFR)\n" +
+      "- Primary Open Loop Map Enrichment (AFR)\n" +
+      "- Throttle Opening Angle (%)"
+    );
+  }
+
+  const out = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const c = lines[i].split(sep);
+
+    const rpm = parseFloat(c[idxRPM]);
+    const mapBar = parseFloat(c[idxMAP]);
+    const afr = parseFloat(c[idxAFR]);
+    const afrTarget = parseFloat(c[idxTarget]);
+    const tps = parseFloat(c[idxTPS]);
+
+    if ([rpm, mapBar, afr, afrTarget, tps].some(v => Number.isNaN(v))) {
+      continue;
+    }
+
+    out.push({
+      rpm,
+      map: mapBar * 14.5038, // bar -> psi
+      afr,
+      afrTarget,
+      tps
+    });
+  }
+
+  if (!out.length) {
+    throw new Error("No valid log rows parsed");
+  }
+
   return out;
 }
