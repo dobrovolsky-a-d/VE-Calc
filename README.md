@@ -1,18 +1,17 @@
 # VE-Calc
 
 REQUIRED LOG PARAMETERS:
-- Engine Speed (RPM)
-- Manifold Absolute Pressure (PSI)
-- Wideband AFR (Actual)
-- Target AFR
-- - Throttle Position (%)
 
-RECOMMENDED:
+Engine Speed (rpm)
 
-- Injector Duty Cycle (%)
-- Intake Air Temperature
+Manifold Absolute Pressure (bar или kPa)
 
-NOTES:
-- Log stable conditions only
-- No transient throttle
-- MAP must be in PSI
+AFR (measured) или Wideband O2
+
+AFR Target (или Commanded Lambda)
+
+Injector Pulse Width (ms) или Injector Duty
+
+MAF (g/s) — если расчет по MAF
+
+Throttle Position — желательно, чтобы понимать режим
