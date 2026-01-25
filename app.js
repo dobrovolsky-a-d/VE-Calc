@@ -63,13 +63,16 @@ document.getElementById("calculate").addEventListener("click", () => {
     return;
   }
 
-  result = calculateVE(logData, veOld);
+  const interpMode = document.getElementById("interpMode").value;
+
+  result = calculateVE(logData, veOld, interpMode);
   renderResult(result);
   exportBtn.disabled = false;
 
   setDebug(
 `Calculation done
-Used VE cells: ${result.stats.usedCells}`
+Used VE cells: ${result.stats.usedCells}
+Interpolation: ${interpMode}`
   );
 });
 
