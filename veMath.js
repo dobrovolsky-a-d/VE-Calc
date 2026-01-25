@@ -48,10 +48,14 @@ export function calculateVE(log, veOld, interpMode = "off") {
   }
 
   const veSmooth = smooth(veCalc);
-  const veFinal =
-    interpMode === "soft"
-      ? interpolateSoft(veSmooth, veOld.values, cellCorr)
-      : veSmooth;
+
+  let veFinal = veSmooth;
+  if (interpMode === "soft") {
+    veFinal = interpolateSoft(veSmooth, veOld.values, cellCorr);
+  }
+  if (interpMode === "medium") {
+    veFinal = interpolateMedium(veSmooth, veOld.values, cellCorr);
+  }
 
   return {
     VE_old: veOld.values,
@@ -63,32 +67,83 @@ export function calculateVE(log, veOld, interpMode = "off") {
   };
 }
 
-// ---------- INTERPOLATION (SOFT) ----------
+/* ---------- SOFT ---------- */
 function interpolateSoft(ve, veOld, cellCorr) {
   const r = ve.length, c = ve[0].length;
-  const out = JSON.parse(JSON.stringify(ve));
+  const out = clone(ve);
 
   for (let i = 0; i < r; i++) {
     for (let j = 0; j < c; j++) {
-      if (cellCorr[i][j].length > 0) continue; // есть реальные данные
+      if (cellCorr[i][j].length > 0) continue;
 
-      const neighbors = [];
-      if (i > 0 && cellCorr[i - 1][j].length > 0) neighbors.push(out[i - 1][j]);
-      if (i < r - 1 && cellCorr[i + 1][j].length > 0) neighbors.push(out[i + 1][j]);
-      if (j > 0 && cellCorr[i][j - 1].length > 0) neighbors.push(out[i][j - 1]);
-      if (j < c - 1 && cellCorr[i][j + 1].length > 0) neighbors.push(out[i][j + 1]);
+      const n = [];
+      if (i > 0 && cellCorr[i - 1][j].length > 0) n.push(out[i - 1][j]);
+      if (i < r - 1 && cellCorr[i + 1][j].length > 0) n.push(out[i + 1][j]);
+      if (j > 0 && cellCorr[i][j - 1].length > 0) n.push(out[i][j - 1]);
+      if (j < c - 1 && cellCorr[i][j + 1].length > 0) n.push(out[i][j + 1]);
 
-      if (neighbors.length) {
-        out[i][j] = neighbors.reduce((a, b) => a + b, 0) / neighbors.length;
-      } else {
-        out[i][j] = veOld[i][j];
-      }
+      out[i][j] = n.length
+        ? n.reduce((a, b) => a + b, 0) / n.length
+        : veOld[i][j];
     }
   }
   return out;
 }
 
-// ---------- helpers ----------
+/* ---------- MEDIUM ---------- */
+function interpolateMedium(ve, veOld, cellCorr) {
+  const r = ve.length, c = ve[0].length;
+  const out = clone(ve);
+
+  // --- pass 1: RPM (horizontal) ---
+  for (let i = 0; i < r; i++) {
+    let lastIdx = null;
+    for (let j = 0; j < c; j++) {
+      if (cellCorr[i][j].length > 0) {
+        if (lastIdx !== null && j - lastIdx > 1) {
+          const v0 = out[i][lastIdx];
+          const v1 = out[i][j];
+          for (let k = lastIdx + 1; k < j; k++) {
+            const t = (k - lastIdx) / (j - lastIdx);
+            out[i][k] = v0 + (v1 - v0) * t;
+          }
+        }
+        lastIdx = j;
+      }
+    }
+  }
+
+  // --- pass 2: MAP (vertical) ---
+  for (let j = 0; j < c; j++) {
+    let lastIdx = null;
+    for (let i = 0; i < r; i++) {
+      if (cellCorr[i][j].length > 0) {
+        if (lastIdx !== null && i - lastIdx > 1) {
+          const v0 = out[lastIdx][j];
+          const v1 = out[i][j];
+          for (let k = lastIdx + 1; k < i; k++) {
+            const t = (k - lastIdx) / (i - lastIdx);
+            out[k][j] = v0 + (v1 - v0) * t;
+          }
+        }
+        lastIdx = i;
+      }
+    }
+  }
+
+  // fallback
+  for (let i = 0; i < r; i++) {
+    for (let j = 0; j < c; j++) {
+      if (cellCorr[i][j].length === 0 && Number.isNaN(out[i][j])) {
+        out[i][j] = veOld[i][j];
+      }
+    }
+  }
+
+  return out;
+}
+
+/* ---------- helpers ---------- */
 function makeMatrix(r, c, v) {
   return Array.from({ length: r }, () => Array(c).fill(v));
 }
@@ -105,7 +160,7 @@ function median(arr) {
 }
 function smooth(m) {
   const r = m.length, c = m[0].length;
-  const o = JSON.parse(JSON.stringify(m));
+  const o = clone(m);
   for (let i = 1; i < r - 1; i++)
     for (let j = 1; j < c - 1; j++)
       o[i][j] =
@@ -113,7 +168,9 @@ function smooth(m) {
           m[i - 1][j] +
           m[i + 1][j] +
           m[i][j - 1] +
-          m[i][j + 1]) /
-        5;
+          m[i][j + 1]) / 5;
   return o;
+}
+function clone(m) {
+  return JSON.parse(JSON.stringify(m));
 }
