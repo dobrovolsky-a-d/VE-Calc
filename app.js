@@ -11,18 +11,34 @@ const debug = document.getElementById("debug");
 const output = document.getElementById("output");
 const exportBtn = document.getElementById("export");
 
-function setDebug(text) {
-  debug.textContent = text;
+function setDebug(t) {
+  debug.textContent = t;
 }
 
 document.getElementById("loadLog").addEventListener("change", async (e) => {
   try {
+    const files = Array.from(e.target.files);
     const tpsCutoff = parseFloat(document.getElementById("tpsCutoff").value);
-    logData = await parseLog(e.target.files[0], tpsCutoff);
-    setDebug(`Log loaded\nRows after filtering: ${logData.length}`);
+
+    let merged = [];
+    let info = [];
+
+    for (const f of files) {
+      const parsed = await parseLog(f, tpsCutoff);
+      merged.push(...parsed);
+      info.push(`${f.name}: ${parsed.length}`);
+    }
+
+    logData = merged;
+
+    setDebug(
+`Logs loaded: ${files.length}
+${info.join("\n")}
+Total merged rows: ${logData.length}`
+    );
   } catch (err) {
-    setDebug("Log error:\n" + err.message);
     logData = null;
+    setDebug("Log error:\n" + err.message);
   }
 });
 
@@ -30,20 +46,20 @@ document.getElementById("loadVE").addEventListener("change", async (e) => {
   try {
     veOld = await parseVE(e.target.files[0]);
     setDebug(
-      `VE loaded
+`VE loaded
 Rows: ${veOld.rows}
 Cols: ${veOld.cols}
 Cells: ${veOld.rows * veOld.cols}`
     );
   } catch (err) {
-    setDebug("VE error:\n" + err.message);
     veOld = null;
+    setDebug("VE error:\n" + err.message);
   }
 });
 
 document.getElementById("calculate").addEventListener("click", () => {
   if (!logData || !veOld) {
-    setDebug("Load log and VE table first");
+    setDebug("Load logs and VE table first");
     return;
   }
 
@@ -51,16 +67,9 @@ document.getElementById("calculate").addEventListener("click", () => {
   renderResult(result);
   exportBtn.disabled = false;
 
-  const s = result.stats;
   setDebug(
-`VE TABLE:
-Rows: ${s.veRows}
-Cols: ${s.veCols}
-Cells: ${s.veCells}
-
-LOG:
-Rows used: ${s.validLogRows}
-Used VE cells: ${s.usedCells}`
+`Calculation done
+Used VE cells: ${result.stats.usedCells}`
   );
 });
 
