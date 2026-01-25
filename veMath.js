@@ -1,4 +1,4 @@
-export function calculateVE(log, veOld) {
+export function calculateVE(log, veOld, interpMode = "off") {
   const rows = veOld.rows;
   const cols = veOld.cols;
 
@@ -21,14 +21,14 @@ export function calculateVE(log, veOld) {
     usedCells.add(`${r}:${c}`);
   }
 
-  const veNew = makeMatrix(rows, cols, 0);
+  const veCalc = makeMatrix(rows, cols, 0);
   const corrPct = makeMatrix(rows, cols, 0);
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const samples = cellCorr[r][c];
       if (samples.length < 3) {
-        veNew[r][c] = veOld.values[r][c];
+        veCalc[r][c] = veOld.values[r][c];
         corrPct[r][c] = 0;
         continue;
       }
@@ -36,20 +36,26 @@ export function calculateVE(log, veOld) {
       const med = median(samples);
       const filtered = samples.filter(v => Math.abs(v - med) <= 0.15);
       if (!filtered.length) {
-        veNew[r][c] = veOld.values[r][c];
+        veCalc[r][c] = veOld.values[r][c];
         corrPct[r][c] = 0;
         continue;
       }
 
       const avg = filtered.reduce((a, b) => a + b, 0) / filtered.length;
-      veNew[r][c] = veOld.values[r][c] * avg;
+      veCalc[r][c] = veOld.values[r][c] * avg;
       corrPct[r][c] = (avg - 1) * 100;
     }
   }
 
+  const veSmooth = smooth(veCalc);
+  const veFinal =
+    interpMode === "soft"
+      ? interpolateSoft(veSmooth, veOld.values, cellCorr)
+      : veSmooth;
+
   return {
     VE_old: veOld.values,
-    VE_new: smooth(veNew),
+    VE_new: veFinal,
     Correction: corrPct,
     stats: {
       usedCells: usedCells.size
@@ -57,6 +63,32 @@ export function calculateVE(log, veOld) {
   };
 }
 
+// ---------- INTERPOLATION (SOFT) ----------
+function interpolateSoft(ve, veOld, cellCorr) {
+  const r = ve.length, c = ve[0].length;
+  const out = JSON.parse(JSON.stringify(ve));
+
+  for (let i = 0; i < r; i++) {
+    for (let j = 0; j < c; j++) {
+      if (cellCorr[i][j].length > 0) continue; // есть реальные данные
+
+      const neighbors = [];
+      if (i > 0 && cellCorr[i - 1][j].length > 0) neighbors.push(out[i - 1][j]);
+      if (i < r - 1 && cellCorr[i + 1][j].length > 0) neighbors.push(out[i + 1][j]);
+      if (j > 0 && cellCorr[i][j - 1].length > 0) neighbors.push(out[i][j - 1]);
+      if (j < c - 1 && cellCorr[i][j + 1].length > 0) neighbors.push(out[i][j + 1]);
+
+      if (neighbors.length) {
+        out[i][j] = neighbors.reduce((a, b) => a + b, 0) / neighbors.length;
+      } else {
+        out[i][j] = veOld[i][j];
+      }
+    }
+  }
+  return out;
+}
+
+// ---------- helpers ----------
 function makeMatrix(r, c, v) {
   return Array.from({ length: r }, () => Array(c).fill(v));
 }
@@ -76,6 +108,12 @@ function smooth(m) {
   const o = JSON.parse(JSON.stringify(m));
   for (let i = 1; i < r - 1; i++)
     for (let j = 1; j < c - 1; j++)
-      o[i][j] = (m[i][j] + m[i-1][j] + m[i+1][j] + m[i][j-1] + m[i][j+1]) / 5;
+      o[i][j] =
+        (m[i][j] +
+          m[i - 1][j] +
+          m[i + 1][j] +
+          m[i][j - 1] +
+          m[i][j + 1]) /
+        5;
   return o;
 }
