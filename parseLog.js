@@ -1,9 +1,3 @@
-// parseLog.js
-// Парсер RomRaider логов
-// Фильтры:
-// 1) CL/OL Fueling status (используем только OL = 10)
-// 2) TPS >= 4%
-// MAP: bar -> psi
 export async function parseLog(file, tpsCutoff = 4) {
   const text = await file.text();
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -15,10 +9,10 @@ export async function parseLog(file, tpsCutoff = 4) {
   const idxAFR = headers.findIndex(h => h.includes("AEM UEGO"));
   const idxTarget = headers.findIndex(h => h.includes("Primary Open Loop"));
   const idxTPS = headers.findIndex(h => h.includes("Throttle Opening"));
-  const idxFuelStatus = headers.findIndex(h => h.includes("CL/OL Fueling"));
+  const idxFuel = headers.findIndex(h => h.includes("CL/OL Fueling"));
 
-  if ([idxRPM, idxMAP, idxAFR, idxTarget, idxTPS, idxFuelStatus].some(i => i < 0)) {
-    throw new Error("Missing required columns in log");
+  if ([idxRPM, idxMAP, idxAFR, idxTarget, idxTPS, idxFuel].some(i => i < 0)) {
+    throw new Error("Missing required columns");
   }
 
   const out = [];
@@ -31,22 +25,20 @@ export async function parseLog(file, tpsCutoff = 4) {
     const afr = parseFloat(c[idxAFR]);
     const afrTarget = parseFloat(c[idxTarget]);
     const tps = parseFloat(c[idxTPS]);
-    const fuelStatus = parseInt(c[idxFuelStatus], 10);
+    const fuelStatus = parseInt(c[idxFuel], 10);
 
-    if ([rpm, mapBar, afr, afrTarget, tps, fuelStatus].some(v => Number.isNaN(v))) continue;
-    if (fuelStatus !== 10) continue;        // OL only
-    if (tps < tpsCutoff) continue;          // TPS filter
+    if ([rpm, mapBar, afr, afrTarget, tps, fuelStatus].some(Number.isNaN)) continue;
+    if (fuelStatus !== 10) continue;
+    if (tps < tpsCutoff) continue;
 
     out.push({
       rpm,
-      map: mapBar * 14.5038, // bar -> psi
+      map: mapBar * 14.5038,
       afr,
-      afrTarget,
-      tps
+      afrTarget
     });
   }
 
   if (!out.length) throw new Error("No valid rows after filtering");
-
   return out;
 }
