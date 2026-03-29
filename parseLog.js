@@ -4,11 +4,11 @@ export async function parseLog(file, tpsCutoff = 4) {
   const sep = lines[0].includes(";") ? ";" : ",";
   const headers = lines[0].split(sep).map(h => h.trim());
 
-  const idxRPM = headers.findIndex(h => h.includes("Engine Speed"));
-  const idxMAP = headers.findIndex(h => h.includes("Manifold Absolute Pressure"));
-  const idxAFR = headers.findIndex(h => h.includes("AEM UEGO"));
-  const idxTarget = headers.findIndex(h => h.includes("Primary Open Loop"));
-  const idxTPS = headers.findIndex(h => h.includes("Throttle Opening"));
+  const idxRPM = headers.findIndex(h => h.includes("Engine Speed (rpm)"));
+  const idxMAP = headers.findIndex(h => h.includes("Manifold Absolute Pressure (bar)"));
+  const idxAFR = headers.findIndex(h => h.includes("AEM UEGO Wideband [9600 baud] (AFR Gasoline)"));
+  const idxTarget = headers.findIndex(h => h.includes("Primary Open Loop Map Enrichment* (estimated AFR)"));
+  const idxTPS = headers.findIndex(h => h.includes("Throttle Opening Angle (%)"));
   const idxFuel = headers.findIndex(h => h.includes("CL/OL Fueling"));
 
   if ([idxRPM, idxMAP, idxAFR, idxTarget, idxTPS, idxFuel].some(i => i < 0)) {
