@@ -1,44 +1,55 @@
 export async function parseLog(file, tpsCutoff = 4) {
+
   const text = await file.text();
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
-  const sep = lines[0].includes(";") ? ";" : ",";
-  const headers = lines[0].split(sep).map(h => h.trim());
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length);
 
-  const idxRPM = headers.findIndex(h => h.includes("Engine Speed (rpm)"));
-  const idxMAP = headers.findIndex(h => h.includes("Manifold Absolute Pressure (bar)"));
-  const idxAFR = headers.findIndex(h => h.includes("AEM UEGO Wideband [9600 baud] (AFR Gasoline)"));
-  const idxTarget = headers.findIndex(h => h.includes("Primary Open Loop Map Enrichment* (estimated AFR)"));
-  const idxTPS = headers.findIndex(h => h.includes("Throttle Opening Angle (%)"));
-  const idxFuel = headers.findIndex(h => h.includes("CL/OL Fueling"));
+  const separator = lines[0].includes(";") ? ";" : ",";
+  const headers = lines[0].split(separator).map(h => h.trim());
 
-  if ([idxRPM, idxMAP, idxAFR, idxTarget, idxTPS, idxFuel].some(i => i < 0)) {
+  const idxRPM = headers.findIndex(h => h.includes("Engine Speed"));
+  const idxMAP = headers.findIndex(h => h.includes("Manifold Absolute Pressure"));
+  const idxAFR = headers.findIndex(h => h.includes("AEM UEGO"));
+  const idxTarget = headers.findIndex(h => h.includes("Primary Open Loop"));
+  const idxTPS = headers.findIndex(h => h.includes("Throttle Opening"));
+
+  if ([idxRPM, idxMAP, idxAFR, idxTarget, idxTPS].some(i => i === -1)) {
     throw new Error("Missing required columns");
   }
 
-  const out = [];
+  const result = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const c = lines[i].split(sep);
 
-    const rpm = parseFloat(c[idxRPM]);
-    const mapBar = parseFloat(c[idxMAP]);
-    const afr = parseFloat(c[idxAFR]);
-    const afrTarget = parseFloat(c[idxTarget]);
-    const tps = parseFloat(c[idxTPS]);
-    const fuelStatus = parseInt(c[idxFuel], 10);
+    const cols = lines[i].split(separator);
 
-    if ([rpm, mapBar, afr, afrTarget, tps, fuelStatus].some(Number.isNaN)) continue;
-    if (fuelStatus !== 10) continue;
+    const rpm = parseFloat(cols[idxRPM]);
+    const mapBar = parseFloat(cols[idxMAP]);
+    const afr = parseFloat(cols[idxAFR]);
+    const afrTarget = parseFloat(cols[idxTarget]);
+    const tps = parseFloat(cols[idxTPS]);
+
+    if (
+      Number.isNaN(rpm) ||
+      Number.isNaN(mapBar) ||
+      Number.isNaN(afr) ||
+      Number.isNaN(afrTarget) ||
+      Number.isNaN(tps)
+    ) continue;
+
+    // TPS filter
     if (tps < tpsCutoff) continue;
 
-    out.push({
-      rpm,
-      map: mapBar * 14.5038,
-      afr,
-      afrTarget
+    result.push({
+      rpm: rpm,
+      map: mapBar * 14.5038, // bar → psi
+      afr: afr,
+      afrTarget: afrTarget
     });
   }
 
-  if (!out.length) throw new Error("No valid rows after filtering");
-  return out;
+  if (result.length === 0) {
+    throw new Error("No valid rows after filtering");
+  }
+
+  return result;
 }
