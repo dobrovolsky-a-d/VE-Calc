@@ -1,8 +1,22 @@
 export function exportRomRaider(matrix) {
-  const csv = matrix.map(r => r.map(v => v.toFixed(2)).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
+
+  const rows = matrix.map(row =>
+    row
+      .map(v => Number(v).toFixed(2))
+      .join("\t")
+  );
+
+  const content = rows.join("\n");
+
+  const blob = new Blob([content], { type: "text/plain" });
+
+  const url = URL.createObjectURL(blob);
+
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "VE_new.csv";
+  a.href = url;
+  a.download = "VE_new.txt";
+
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
 }
