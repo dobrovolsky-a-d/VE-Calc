@@ -8,7 +8,6 @@ export function calculateVE(log, veOld, interpMode = "off") {
   );
 
   const coverage = makeMatrix(rows, cols, 0);
-
   const usedCells = new Set();
 
   for (let i = 0; i < log.length; i++) {
@@ -29,6 +28,7 @@ export function calculateVE(log, veOld, interpMode = "off") {
 
   const veCalc = makeMatrix(rows, cols, 0);
   const corrPct = makeMatrix(rows, cols, 0);
+  const hasData = makeMatrix(rows, cols, false);
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -40,6 +40,8 @@ export function calculateVE(log, veOld, interpMode = "off") {
         corrPct[r][c] = 0;
         continue;
       }
+
+      hasData[r][c] = true;
 
       const med = median(samples);
       const filtered = samples.filter(v => Math.abs(v - med) <= 0.15);
@@ -57,18 +59,18 @@ export function calculateVE(log, veOld, interpMode = "off") {
     }
   }
 
-  const veSmooth = smooth(veCalc);
-
-  let veFinal = veSmooth;
+  let veInterp = clone(veCalc);
 
   if (interpMode === "soft")
-    veFinal = interpolateSoft(veSmooth, veOld.values, cellCorr);
+    veInterp = interpolateSoft(veInterp, hasData);
 
   if (interpMode === "medium")
-    veFinal = interpolateMedium(veSmooth, veOld.values, cellCorr);
+    veInterp = interpolateMedium(veInterp, hasData);
 
   if (interpMode === "hard")
-    veFinal = interpolateHard(veSmooth);
+    veInterp = interpolateHard(veInterp, hasData);
+
+  const veFinal = smooth(veInterp);
 
   return {
     VE_old: veOld.values,
@@ -83,17 +85,17 @@ export function calculateVE(log, veOld, interpMode = "off") {
 
 /* ---------- SOFT ---------- */
 
-function interpolateSoft(ve, veOld, cellCorr) {
+function interpolateSoft(matrix, mask) {
 
-  const r = ve.length;
-  const c = ve[0].length;
+  const r = matrix.length;
+  const c = matrix[0].length;
 
-  const out = clone(ve);
+  const out = clone(matrix);
 
   for (let i = 0; i < r; i++) {
     for (let j = 0; j < c; j++) {
 
-      if (cellCorr[i][j].length > 0) continue;
+      if (mask[i][j]) continue;
 
       const n = [];
 
@@ -112,12 +114,12 @@ function interpolateSoft(ve, veOld, cellCorr) {
 
 /* ---------- MEDIUM ---------- */
 
-function interpolateMedium(ve, veOld, cellCorr) {
+function interpolateMedium(matrix, mask) {
 
-  const r = ve.length;
-  const c = ve[0].length;
+  const r = matrix.length;
+  const c = matrix[0].length;
 
-  const out = clone(ve);
+  const out = clone(matrix);
 
   for (let i = 0; i < r; i++) {
 
@@ -125,7 +127,7 @@ function interpolateMedium(ve, veOld, cellCorr) {
 
     for (let j = 0; j < c; j++) {
 
-      if (cellCorr[i][j].length > 0) {
+      if (mask[i][j]) {
 
         if (last !== null && j - last > 1) {
 
@@ -138,7 +140,6 @@ function interpolateMedium(ve, veOld, cellCorr) {
             out[i][k] = v0 + (v1 - v0) * t;
 
           }
-
         }
 
         last = j;
@@ -149,33 +150,42 @@ function interpolateMedium(ve, veOld, cellCorr) {
   return out;
 }
 
-/* ---------- HARD ---------- */
+/* ---------- HARD (distance interpolation) ---------- */
 
-function interpolateHard(matrix) {
+function interpolateHard(matrix, mask) {
 
   const r = matrix.length;
   const c = matrix[0].length;
 
-  let out = clone(matrix);
+  const out = clone(matrix);
 
-  for (let pass = 0; pass < 6; pass++) {
+  const points = [];
 
-    const next = clone(out);
+  for (let i = 0; i < r; i++)
+    for (let j = 0; j < c; j++)
+      if (mask[i][j])
+        points.push({ i, j, v: matrix[i][j] });
 
-    for (let i = 1; i < r - 1; i++) {
-      for (let j = 1; j < c - 1; j++) {
+  for (let i = 0; i < r; i++) {
+    for (let j = 0; j < c; j++) {
 
-        next[i][j] =
-          (out[i][j] +
-          out[i-1][j] +
-          out[i+1][j] +
-          out[i][j-1] +
-          out[i][j+1]) / 5;
+      if (mask[i][j]) continue;
 
+      let num = 0;
+      let den = 0;
+
+      for (const p of points) {
+
+        const d = Math.hypot(p.i - i, p.j - j) + 0.0001;
+
+        const w = 1 / d;
+
+        num += p.v * w;
+        den += w;
       }
-    }
 
-    out = next;
+      out[i][j] = num / den;
+    }
   }
 
   return out;
