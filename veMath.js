@@ -17,9 +17,11 @@ export function calculateVE(log, veOld, interpMode = "off") {
     let factor = p.afr / p.afrTarget;
     factor = clamp(factor, 0.75, 1.25);
 
-    const mapPsi = p.map * 14.5038;
-const r = findClosestIndex(loadAxis, mapPsi);
-    const c = findClosestIndex(rpmAxis, p.rpm);
+   const mapPsi = p.map * 14.5038;
+
+const r = findClosestIndex(rpmAxis, p.rpm);
+const c = findClosestIndex(loadAxis, mapPsi);
+    
 
     cellCorr[r][c].push(factor);
     coverage[r][c]++;
