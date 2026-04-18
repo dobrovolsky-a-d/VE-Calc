@@ -3,11 +3,24 @@ export async function parseLog(file) {
   const text = await file.text();
   const lines = text.split(/\r?\n/);
 
-  // 🔥 чистим header
+  if (lines.length < 2) {
+    throw new Error("Empty log");
+  }
+
+  // 🔥 авто-детект разделителя
+  function detectDelimiter(line) {
+    if (line.includes("\t")) return "\t";
+    if (line.includes(";")) return ";";
+    if (line.includes(",")) return ",";
+    return ",";
+  }
+
+  const delimiter = detectDelimiter(lines[0]);
+
   const clean = s =>
     s.replace(/["']/g, "").trim().toLowerCase();
 
-  const headerRaw = lines[0].split(",");
+  const headerRaw = lines[0].split(delimiter);
   const header = headerRaw.map(clean);
 
   function findExact(name) {
@@ -19,11 +32,11 @@ export async function parseLog(file) {
   const mapIndex = findExact("Manifold Absolute Pressure (bar)");
   const targetIndex = findExact("Primary Open Loop Map Enrichment* (estimated AFR)");
 
-  // wideband ищем по ключу
   const afrIndex = header.findIndex(h =>
     h.includes("uego") || h.includes("aem")
   );
 
+  console.log("DELIMITER:", delimiter);
   console.log("HEADER:", headerRaw);
   console.log("INDEXES:", { rpmIndex, mapIndex, targetIndex, afrIndex });
 
@@ -35,7 +48,7 @@ export async function parseLog(file) {
 
   for (let i = 1; i < lines.length; i++) {
 
-    const row = lines[i].split(",");
+    const row = lines[i].split(delimiter);
 
     const rpm = parseFloat(row[rpmIndex]);
     const mapBar = parseFloat(row[mapIndex]);
@@ -46,7 +59,7 @@ export async function parseLog(file) {
 
     result.push({
       rpm,
-      map: mapBar,   // absolute bar
+      map: mapBar,
       afr,
       afrTarget
     });
