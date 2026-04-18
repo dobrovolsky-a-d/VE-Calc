@@ -48,10 +48,51 @@ document.getElementById("calculate").addEventListener("click", () => {
   }
 
   const mode = document.getElementById("mode").value;
+const res = calculateVE(logData, veOld, mode);
 
-  const res = calculateVE(logData, veOld, mode);
+renderResult(res);
 
-  console.log(res);
-
-  setDebug("Done. Check console.");
+setDebug("Done.");
 });
+
+function renderResult(res) {
+
+  debug.textContent = "";
+
+  const container = document.createElement("div");
+
+  container.appendChild(makeTable("VE OLD", res.VE_old));
+  container.appendChild(makeTable("VE NEW", res.VE_new));
+  container.appendChild(makeTable("CORR %", res.Correction));
+  container.appendChild(makeTable("COVERAGE", res.coverage));
+
+  document.body.appendChild(container);
+}
+
+function makeTable(title, data) {
+
+  const wrapper = document.createElement("div");
+
+  const h = document.createElement("h3");
+  h.textContent = title;
+  wrapper.appendChild(h);
+
+  const table = document.createElement("table");
+
+  data.forEach(row => {
+    const tr = document.createElement("tr");
+
+    row.forEach(v => {
+      const td = document.createElement("td");
+      td.textContent = Number(v).toFixed(1);
+      td.style.padding = "4px";
+      td.style.border = "1px solid #444";
+      tr.appendChild(td);
+    });
+
+    table.appendChild(tr);
+  });
+
+  wrapper.appendChild(table);
+  return wrapper;
+}
