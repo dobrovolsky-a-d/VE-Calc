@@ -15,8 +15,11 @@ function setDebug(t) {
   debug.textContent = t;
 }
 
+/* ===================== LOAD LOG ===================== */
+
 document.getElementById("loadLog").addEventListener("change", async (e) => {
   try {
+
     const files = Array.from(e.target.files);
     const tpsCutoff = parseFloat(document.getElementById("tpsCutoff").value);
 
@@ -24,9 +27,12 @@ document.getElementById("loadLog").addEventListener("change", async (e) => {
     let info = [];
 
     for (const f of files) {
+
       const parsed = await parseLog(f, tpsCutoff);
+
       merged.push(...parsed);
       info.push(`${f.name}: ${parsed.length}`);
+
     }
 
     logData = merged;
@@ -36,28 +42,43 @@ document.getElementById("loadLog").addEventListener("change", async (e) => {
 ${info.join("\n")}
 Total merged rows: ${logData.length}`
     );
+
   } catch (err) {
+
     logData = null;
     setDebug("Log error:\n" + err.message);
+
   }
 });
 
+/* ===================== LOAD VE ===================== */
+
 document.getElementById("loadVE").addEventListener("change", async (e) => {
   try {
-    veOld = await parseVE(e.target.files[0]);
+
+    const file = e.target.files[0];
+
+    veOld = await parseVE(file);
+
     setDebug(
 `VE loaded
 Rows: ${veOld.rows}
 Cols: ${veOld.cols}
 Cells: ${veOld.rows * veOld.cols}`
     );
+
   } catch (err) {
+
     veOld = null;
     setDebug("VE error:\n" + err.message);
+
   }
 });
 
+/* ===================== CALCULATE ===================== */
+
 document.getElementById("calculate").addEventListener("click", () => {
+
   if (!logData || !veOld) {
     setDebug("Load logs and VE table first");
     return;
@@ -66,33 +87,39 @@ document.getElementById("calculate").addEventListener("click", () => {
   const interpMode = document.getElementById("interpMode").value;
 
   result = calculateVE(logData, veOld, interpMode);
+
   renderResult(result);
+
   exportBtn.disabled = false;
 
   setDebug(
 `Calculation done
-Used VE cells: ${result.stats.usedCells}
+Used VE cells: ${result.coverage.flat().filter(v => v > 0).length}
 Interpolation: ${interpMode}`
   );
+
 });
+
+/* ===================== EXPORT ===================== */
 
 exportBtn.addEventListener("click", () => {
   if (result) exportRomRaider(result.VE_new);
 });
+
+/* ===================== RENDER ===================== */
 
 function renderResult(res) {
 
   output.innerHTML = "";
 
   renderTable("Original VE", res.VE_old);
-
   renderTable("Correction %", res.Correction);
-
   renderTable("New VE", res.VE_new, res.VE_old);
 
   renderCoverage("Log Coverage", res.coverage);
-
 }
+
+/* ---------- TABLE ---------- */
 
 function renderTable(title, matrix, ref = null) {
 
@@ -109,18 +136,15 @@ function renderTable(title, matrix, ref = null) {
     row.forEach((v, c) => {
 
       const td = document.createElement("td");
-
       td.textContent = Number(v).toFixed(2);
 
       if (ref) {
-
         const diff = ((v - ref[r][c]) / ref[r][c]) * 100;
 
         if (diff > 3) td.style.background = "#ff6b6b";
         else if (diff > 1) td.style.background = "#ffd0d0";
         else if (diff < -3) td.style.background = "#6b8cff";
         else if (diff < -1) td.style.background = "#d0dcff";
-
       }
 
       tr.appendChild(td);
@@ -133,6 +157,8 @@ function renderTable(title, matrix, ref = null) {
 
   output.appendChild(table);
 }
+
+/* ---------- COVERAGE ---------- */
 
 function renderCoverage(title, matrix) {
 
