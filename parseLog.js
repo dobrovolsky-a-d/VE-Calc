@@ -1,18 +1,16 @@
-export async function parseLog(file, tpsCutoff = 4) {
+export async function parseLog(file) {
 
   const text = await file.text();
-  const lines = text.split(/\r?\n/).filter(l => l.trim().length);
+  const lines = text.split("\n");
 
-  const separator = lines[0].includes(";") ? ";" : ",";
-  const headers = lines[0].split(separator).map(h => h.trim());
+  const header = lines[0].split(",");
 
-  const idxRPM = headers.findIndex(h => h.includes("Engine Speed"));
-  const idxMAP = headers.findIndex(h => h.includes("Manifold Absolute Pressure"));
-  const idxAFR = headers.findIndex(h => h.includes("AEM UEGO"));
-  const idxTarget = headers.findIndex(h => h.includes("Primary Open Loop"));
-  const idxTPS = headers.findIndex(h => h.includes("Throttle Opening"));
+  const rpmIndex = header.indexOf("Engine Speed (rpm)");
+  const mapIndex = header.indexOf("Manifold Relative Pressure (bar)");
+  const afrIndex = header.indexOf("A/F Sensor #1");
+  const targetIndex = header.indexOf("AF Correction Target");
 
-  if ([idxRPM, idxMAP, idxAFR, idxTarget, idxTPS].some(i => i === -1)) {
+  if (rpmIndex === -1 || mapIndex === -1 || afrIndex === -1 || targetIndex === -1) {
     throw new Error("Missing required columns");
   }
 
@@ -20,35 +18,16 @@ export async function parseLog(file, tpsCutoff = 4) {
 
   for (let i = 1; i < lines.length; i++) {
 
-    const cols = lines[i].split(separator);
+    const row = lines[i].split(",");
 
-    const rpm = parseFloat(cols[idxRPM]);
-    const mapBar = parseFloat(cols[idxMAP]);
-    const afr = parseFloat(cols[idxAFR]);
-    const afrTarget = parseFloat(cols[idxTarget]);
-    const tps = parseFloat(cols[idxTPS]);
+    const rpm = parseFloat(row[rpmIndex]);
+    const map = parseFloat(row[mapIndex]);
+    const afr = parseFloat(row[afrIndex]);
+    const afrTarget = parseFloat(row[targetIndex]);
 
-    if (
-      Number.isNaN(rpm) ||
-      Number.isNaN(mapBar) ||
-      Number.isNaN(afr) ||
-      Number.isNaN(afrTarget) ||
-      Number.isNaN(tps)
-    ) continue;
+    if (isNaN(rpm) || isNaN(map) || isNaN(afr) || isNaN(afrTarget)) continue;
 
-    // TPS filter
-    if (tps < tpsCutoff) continue;
-
-    result.push({
-      rpm: rpm,
-      map: mapBar * 14.5038, // bar → psi
-      afr: afr,
-      afrTarget: afrTarget
-    });
-  }
-
-  if (result.length === 0) {
-    throw new Error("No valid rows after filtering");
+    result.push({ rpm, map, afr, afrTarget });
   }
 
   return result;
