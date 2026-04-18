@@ -6,25 +6,21 @@ export function calculateVE(log, veOld, interpMode = "off") {
   const rpmAxis = veOld.rpmAxis;
   const loadAxis = veOld.loadAxis;
 
-  const cellCorr = Array.from({ length: rows }, () =>
-    Array.from({ length: cols }, () => [])
-  );
-
+  const cellCorr = makeMatrix(rows, cols, []);
   const coverage = makeMatrix(rows, cols, 0);
 
   for (let p of log) {
 
+    const mapPsi = p.map * 14.5038;
+
+    const row = findClosestIndex(rpmAxis, p.rpm);
+    const col = findClosestIndex(loadAxis, mapPsi);
+
     let factor = p.afr / p.afrTarget;
     factor = clamp(factor, 0.75, 1.25);
 
-   const mapPsi = p.map * 14.5038;
-
-const r = findClosestIndex(rpmAxis, p.rpm);
-const c = findClosestIndex(loadAxis, mapPsi);
-    
-
-    cellCorr[r][c].push(factor);
-    coverage[r][c]++;
+    cellCorr[row][col].push(factor);
+    coverage[row][col]++;
   }
 
   const veCalc = makeMatrix(rows, cols, 0);
@@ -36,7 +32,7 @@ const c = findClosestIndex(loadAxis, mapPsi);
 
       const samples = cellCorr[r][c];
 
-      if (samples.length === 0) {
+      if (!samples.length) {
         veCalc[r][c] = veOld.values[r][c];
         continue;
       }
@@ -60,10 +56,10 @@ const c = findClosestIndex(loadAxis, mapPsi);
     veInterp = interpolateSoft(veInterp, hasData);
 
   if (interpMode === "medium")
-    veInterp = interpolateMedium(veInterp, hasData);
+    veInterp = smooth(interpolateSoft(veInterp, hasData));
 
   if (interpMode === "hard")
-    veInterp = interpolateHard(veInterp, hasData);
+    veInterp = smoothNTimes(veInterp, 8);
 
   const veFinal = smooth(veInterp);
 
@@ -95,6 +91,7 @@ function findClosestIndex(axis, value) {
 /* ---------- INTERPOLATION ---------- */
 
 function interpolateSoft(m, mask) {
+
   const out = clone(m);
 
   for (let i = 1; i < m.length - 1; i++) {
@@ -110,25 +107,12 @@ function interpolateSoft(m, mask) {
   return out;
 }
 
-function interpolateMedium(m, mask) {
-  return smooth(interpolateSoft(m, mask));
-}
-
-function interpolateHard(m, mask) {
-
-  let out = clone(m);
-
-  for (let k = 0; k < 10; k++) {
-    out = smooth(out);
-  }
-
-  return out;
-}
-
 /* ---------- HELPERS ---------- */
 
 function makeMatrix(r, c, v) {
-  return Array.from({ length: r }, () => Array(c).fill(v));
+  return Array.from({ length: r }, () =>
+    Array.from({ length: c }, () => Array.isArray(v) ? [] : v)
+  );
 }
 
 function clamp(v, a, b) {
@@ -136,6 +120,7 @@ function clamp(v, a, b) {
 }
 
 function smooth(m) {
+
   const out = clone(m);
 
   for (let i = 1; i < m.length - 1; i++) {
@@ -149,6 +134,12 @@ function smooth(m) {
     }
   }
 
+  return out;
+}
+
+function smoothNTimes(m, n) {
+  let out = clone(m);
+  for (let i = 0; i < n; i++) out = smooth(out);
   return out;
 }
 
