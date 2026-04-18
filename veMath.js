@@ -11,23 +11,17 @@ export function calculateVE(log, veOld, interpMode = "off") {
   );
 
   const coverage = makeMatrix(rows, cols, 0);
-  const usedCells = new Set();
 
-  for (let i = 0; i < log.length; i++) {
-
-    const p = log[i];
+  for (let p of log) {
 
     let factor = p.afr / p.afrTarget;
     factor = clamp(factor, 0.75, 1.25);
 
-    // ✅ правильный биннинг по осям
-    const r = findBin(loadAxis, p.map);
-    const c = findBin(rpmAxis, p.rpm);
+    const r = findClosestIndex(loadAxis, p.map);
+    const c = findClosestIndex(rpmAxis, p.rpm);
 
     cellCorr[r][c].push(factor);
     coverage[r][c]++;
-
-    usedCells.add(`${r}:${c}`);
   }
 
   const veCalc = makeMatrix(rows, cols, 0);
@@ -41,24 +35,13 @@ export function calculateVE(log, veOld, interpMode = "off") {
 
       if (samples.length === 0) {
         veCalc[r][c] = veOld.values[r][c];
-        corrPct[r][c] = 0;
         continue;
       }
 
       hasData[r][c] = true;
 
-      const med = median(samples);
-      const filtered = samples.filter(v => Math.abs(v - med) <= 0.15);
+      const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
 
-      if (!filtered.length) {
-        veCalc[r][c] = veOld.values[r][c];
-        corrPct[r][c] = 0;
-        continue;
-      }
-
-      const avg = filtered.reduce((a, b) => a + b, 0) / filtered.length;
-
-      // weighting по количеству точек
       const weight = Math.min(samples.length / 5, 1);
 
       veCalc[r][c] =
@@ -85,131 +68,55 @@ export function calculateVE(log, veOld, interpMode = "off") {
     VE_old: veOld.values,
     VE_new: veFinal,
     Correction: corrPct,
-    coverage: coverage,
-    stats: {
-      usedCells: usedCells.size
-    }
+    coverage
   };
 }
 
 /* ---------- BINNING ---------- */
 
-function findBin(axis, value) {
+function findClosestIndex(axis, value) {
+  let best = 0;
+  let min = Math.abs(axis[0] - value);
 
-  for (let i = 0; i < axis.length - 1; i++) {
-    if (value >= axis[i] && value <= axis[i + 1]) {
-      return i;
+  for (let i = 1; i < axis.length; i++) {
+    const d = Math.abs(axis[i] - value);
+    if (d < min) {
+      min = d;
+      best = i;
     }
   }
 
-  if (value > axis[axis.length - 1])
-    return axis.length - 1;
-
-  return 0;
+  return best;
 }
 
-/* ---------- SOFT ---------- */
+/* ---------- INTERPOLATION ---------- */
 
-function interpolateSoft(matrix, mask) {
+function interpolateSoft(m, mask) {
+  const out = clone(m);
 
-  const r = matrix.length;
-  const c = matrix[0].length;
-
-  const out = clone(matrix);
-
-  for (let i = 0; i < r; i++) {
-    for (let j = 0; j < c; j++) {
+  for (let i = 1; i < m.length - 1; i++) {
+    for (let j = 1; j < m[0].length - 1; j++) {
 
       if (mask[i][j]) continue;
 
-      const n = [];
-
-      if (i > 0) n.push(out[i - 1][j]);
-      if (i < r - 1) n.push(out[i + 1][j]);
-      if (j > 0) n.push(out[i][j - 1]);
-      if (j < c - 1) n.push(out[i][j + 1]);
-
-      if (n.length)
-        out[i][j] = n.reduce((a, b) => a + b, 0) / n.length;
+      out[i][j] =
+        (m[i-1][j] + m[i+1][j] + m[i][j-1] + m[i][j+1]) / 4;
     }
   }
 
   return out;
 }
 
-/* ---------- MEDIUM ---------- */
-
-function interpolateMedium(matrix, mask) {
-
-  const r = matrix.length;
-  const c = matrix[0].length;
-
-  const out = clone(matrix);
-
-  for (let i = 0; i < r; i++) {
-
-    let last = null;
-
-    for (let j = 0; j < c; j++) {
-
-      if (mask[i][j]) {
-
-        if (last !== null && j - last > 1) {
-
-          const v0 = out[i][last];
-          const v1 = out[i][j];
-
-          for (let k = last + 1; k < j; k++) {
-
-            const t = (k - last) / (j - last);
-            out[i][k] = v0 + (v1 - v0) * t;
-
-          }
-        }
-
-        last = j;
-      }
-    }
-  }
-
-  return out;
+function interpolateMedium(m, mask) {
+  return smooth(interpolateSoft(m, mask));
 }
 
-/* ---------- HARD (жёсткий, как ты хотел) ---------- */
+function interpolateHard(m, mask) {
 
-function interpolateHard(matrix, mask) {
+  let out = clone(m);
 
-  const r = matrix.length;
-  const c = matrix[0].length;
-
-  const out = clone(matrix);
-
-  const points = [];
-
-  for (let i = 0; i < r; i++)
-    for (let j = 0; j < c; j++)
-      if (mask[i][j])
-        points.push({ i, j, v: matrix[i][j] });
-
-  for (let i = 0; i < r; i++) {
-    for (let j = 0; j < c; j++) {
-
-      if (mask[i][j]) continue;
-
-      let num = 0;
-      let den = 0;
-
-      for (const p of points) {
-
-        const d = Math.hypot(p.i - i, p.j - j) + 0.0001;
-        const w = 1 / d;
-
-        num += p.v * w;
-        den += w;
-      }
-
-      out[i][j] = num / den;
-    }
+  for (let k = 0; k < 10; k++) {
+    out = smooth(out);
   }
 
   return out;
@@ -225,29 +132,21 @@ function clamp(v, a, b) {
   return Math.min(Math.max(v, a), b);
 }
 
-function median(arr) {
-  const s = [...arr].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
-
 function smooth(m) {
+  const out = clone(m);
 
-  const r = m.length;
-  const c = m[0].length;
-
-  const o = clone(m);
-
-  for (let i = 1; i < r - 1; i++)
-    for (let j = 1; j < c - 1; j++)
-      o[i][j] =
+  for (let i = 1; i < m.length - 1; i++) {
+    for (let j = 1; j < m[0].length - 1; j++) {
+      out[i][j] =
         (m[i][j] +
-        m[i-1][j] +
-        m[i+1][j] +
-        m[i][j-1] +
-        m[i][j+1]) / 5;
+         m[i-1][j] +
+         m[i+1][j] +
+         m[i][j-1] +
+         m[i][j+1]) / 5;
+    }
+  }
 
-  return o;
+  return out;
 }
 
 function clone(m) {
