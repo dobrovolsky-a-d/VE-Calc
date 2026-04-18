@@ -7,32 +7,27 @@ export async function parseVE(file) {
     .map(l => l.trim())
     .filter(l => l.length > 0);
 
-  // универсальный split (tab / ; / , / пробелы)
-  const splitLine = (line) =>
-    line
-      .split(/[\t;, ]+/)
-      .map(v => v.trim())
-      .filter(v => v.length > 0);
-
-  const table = lines.map(splitLine);
+  // 🔥 строго TAB
+  const table = lines.map(line =>
+    line.split("\t").map(v => v.trim())
+  );
 
   if (table.length < 2) {
     throw new Error("VE parse failed: not enough rows");
   }
 
-  // --- первая строка ---
-  // RPM / MAP (psi)  5.02  6.96 ...
+  // --- HEADER ---
   let header = table[0];
 
-  // убираем текстовый первый элемент
+  // убираем "RPM / MAP (psi)"
   if (isNaN(parseFloat(header[0]))) {
     header = header.slice(1);
   }
 
-  const loadAxis = header.map(v => parseFloat(v)).filter(v => !isNaN(v));
+  const loadAxis = header.map(v => parseFloat(v));
 
-  if (loadAxis.length === 0) {
-    throw new Error("VE parse failed: load axis empty");
+  if (loadAxis.some(v => isNaN(v))) {
+    throw new Error("VE parse failed: load axis invalid");
   }
 
   const rpmAxis = [];
@@ -40,12 +35,12 @@ export async function parseVE(file) {
 
   for (let i = 1; i < table.length; i++) {
 
-    const row = table[i].map(v => parseFloat(v));
+    const row = table[i];
 
     if (row.length < 2) continue;
 
-    const rpm = row[0];
-    const veRow = row.slice(1);
+    const rpm = parseFloat(row[0]);
+    const veRow = row.slice(1).map(v => parseFloat(v));
 
     if (isNaN(rpm)) continue;
 
@@ -57,9 +52,7 @@ export async function parseVE(file) {
     throw new Error("VE parse failed: values empty");
   }
 
-  console.log("RPM axis:", rpmAxis);
-  console.log("Load axis:", loadAxis);
-  console.log("Cols:", values[0].length);
+  console.log("Cols:", values[0].length); // <-- ключевая проверка
 
   return {
     rows: values.length,
