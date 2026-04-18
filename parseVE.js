@@ -11,7 +11,7 @@ export async function parseVE(file) {
     throw new Error("VE parse failed: not enough rows");
   }
 
-  // 🔥 строго TAB, без фильтрации
+  // --- split строго по TAB ---
   const table = lines.map(line =>
     line.split("\t").map(v => v.trim())
   );
@@ -19,11 +19,18 @@ export async function parseVE(file) {
   // --- HEADER ---
   let header = table[0];
 
+  // убираем "RPM / MAP (psi)"
   if (isNaN(parseFloat(header[0]))) {
     header = header.slice(1);
   }
 
-  const loadAxis = header.map(v => parseFloat(v));
+  const loadAxis = header
+    .map(v => parseFloat(v))
+    .filter(v => !isNaN(v));
+
+  if (loadAxis.length === 0) {
+    throw new Error("VE parse failed: load axis empty");
+  }
 
   const rpmAxis = [];
   const values = [];
@@ -37,13 +44,17 @@ export async function parseVE(file) {
     const rpm = parseFloat(row[0]);
     if (isNaN(rpm)) continue;
 
-    // 🔥 НЕ фильтруем, просто парсим
-    const veRow = row.slice(1).map(v => parseFloat(v));
+    let veRow = row.slice(1)
+      .map(v => parseFloat(v))
+      .filter(v => !isNaN(v));
 
-    // защита: если строка короче — скипаем
-    if (veRow.length !== loadAxis.length) {
-      console.warn("Skip row (length mismatch):", row.length, loadAxis.length);
-      continue;
+    // 🔥 ключ: подгоняем длину под ось
+    if (veRow.length > loadAxis.length) {
+      veRow = veRow.slice(0, loadAxis.length);
+    }
+
+    if (veRow.length < loadAxis.length) {
+      continue; // реально битая строка
     }
 
     rpmAxis.push(rpm);
@@ -51,10 +62,11 @@ export async function parseVE(file) {
   }
 
   if (!values.length) {
+    console.error("TABLE RAW:", table);
     throw new Error("VE parse failed: no valid rows");
   }
 
-  console.log("VE OK:", values.length, "x", values[0].length);
+  console.log("VE parsed:", values.length, "x", values[0].length);
 
   return {
     rows: values.length,
