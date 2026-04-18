@@ -7,7 +7,6 @@ export async function parseVE(file) {
     .map(l => l.trim())
     .filter(l => l.length > 0);
 
-  // 🔥 строго TAB
   const table = lines.map(line =>
     line.split("\t").map(v => v.trim())
   );
@@ -24,11 +23,7 @@ export async function parseVE(file) {
     header = header.slice(1);
   }
 
-  const loadAxis = header.map(v => parseFloat(v));
-
-  if (loadAxis.some(v => isNaN(v))) {
-    throw new Error("VE parse failed: load axis invalid");
-  }
+  const loadAxis = header.map(Number);
 
   const rpmAxis = [];
   const values = [];
@@ -40,9 +35,12 @@ export async function parseVE(file) {
     if (row.length < 2) continue;
 
     const rpm = parseFloat(row[0]);
-    const veRow = row.slice(1).map(v => parseFloat(v));
-
     if (isNaN(rpm)) continue;
+
+    const veRow = row.slice(1).map(Number);
+
+    // защита от кривых строк
+    if (veRow.length !== loadAxis.length) continue;
 
     rpmAxis.push(rpm);
     values.push(veRow);
@@ -51,8 +49,6 @@ export async function parseVE(file) {
   if (!values.length || !values[0].length) {
     throw new Error("VE parse failed: values empty");
   }
-
-  console.log("Cols:", values[0].length); // <-- ключевая проверка
 
   return {
     rows: values.length,
