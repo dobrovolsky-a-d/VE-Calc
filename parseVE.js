@@ -11,39 +11,19 @@ export async function parseVE(file) {
     throw new Error("VE parse failed: not enough rows");
   }
 
-  // 🔥 авто-детект разделителя
-  function detectDelimiter(line) {
-    if (line.includes("\t")) return "\t";
-    if (line.includes(";")) return ";";
-    if (line.includes(",")) return ",";
-    return " ";
-  }
-
-  const delimiter = detectDelimiter(lines[0]);
-
+  // 🔥 строго TAB, без фильтрации
   const table = lines.map(line =>
-    line
-      .split(delimiter)
-      .map(v => v.trim())
-      .filter(v => v.length > 0)
+    line.split("\t").map(v => v.trim())
   );
 
   // --- HEADER ---
   let header = table[0];
 
-  // убираем "RPM / MAP (psi)"
   if (isNaN(parseFloat(header[0]))) {
     header = header.slice(1);
   }
 
-  const loadAxis = header
-    .map(v => parseFloat(v))
-    .filter(v => !isNaN(v));
-
-  if (loadAxis.length === 0) {
-    console.error("Header:", header);
-    throw new Error("VE parse failed: load axis empty");
-  }
+  const loadAxis = header.map(v => parseFloat(v));
 
   const rpmAxis = [];
   const values = [];
@@ -57,13 +37,12 @@ export async function parseVE(file) {
     const rpm = parseFloat(row[0]);
     if (isNaN(rpm)) continue;
 
-    const veRow = row
-      .slice(1)
-      .map(v => parseFloat(v))
-      .filter(v => !isNaN(v));
+    // 🔥 НЕ фильтруем, просто парсим
+    const veRow = row.slice(1).map(v => parseFloat(v));
 
+    // защита: если строка короче — скипаем
     if (veRow.length !== loadAxis.length) {
-      console.warn("Skipped row:", row);
+      console.warn("Skip row (length mismatch):", row.length, loadAxis.length);
       continue;
     }
 
@@ -72,14 +51,10 @@ export async function parseVE(file) {
   }
 
   if (!values.length) {
-    console.error("Parsed table:", table);
-    throw new Error("VE parse failed: values empty");
+    throw new Error("VE parse failed: no valid rows");
   }
 
-  console.log("Parsed VE:", {
-    rows: values.length,
-    cols: values[0].length
-  });
+  console.log("VE OK:", values.length, "x", values[0].length);
 
   return {
     rows: values.length,
