@@ -17,7 +17,8 @@ export function calculateVE(log, veOld, interpMode = "off") {
     let factor = p.afr / p.afrTarget;
     factor = clamp(factor, 0.75, 1.25);
 
-    const r = findClosestIndex(loadAxis, p.map);
+    const mapPsi = p.map * 14.5038;
+const r = findClosestIndex(loadAxis, mapPsi);
     const c = findClosestIndex(rpmAxis, p.rpm);
 
     cellCorr[r][c].push(factor);
