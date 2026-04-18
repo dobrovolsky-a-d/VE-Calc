@@ -1,61 +1,50 @@
-<!doctype html>
-<html lang="ru">
+<!DOCTYPE html>
+<html>
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>VE Calculator</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <title>VE Calc</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div class="app">
-  <h1>VE Calculator</h1>
+<h1>VE Calculator</h1>
 
-  <section>
-    <h2>Input</h2>
-
-    <label>
-      Log files
-      <input type="file" id="loadLog" multiple>
-    </label>
-
-    <label>
-      VE table
-      <input type="file" id="loadVE">
-    </label>
-
-    <label>
-      TPS cutoff (%)
-      <input type="number" id="tpsCutoff" value="4" min="0" max="20" step="0.5">
-    </label>
-
-    <label>
-      Interpolation
-      <select id="interpMode">
-        <option value="off">Off</option>
-        <option value="soft">Soft</option>
-        <option value="medium">Medium</option>
-        <option value="hard">Hard</option>
-      </select>
-    </label>
-  </section>
-
-  <section>
-    <h2>Diagnostics</h2>
-    <pre id="debug">No data loaded</pre>
-  </section>
-
-  <section>
-    <button id="calculate">Calculate VE</button>
-  </section>
-
-  <section id="output"></section>
-
-  <section>
-    <button id="export" disabled>Export VE_new.csv</button>
-  </section>
+<div class="block">
+  <h3>Load Log</h3>
+  <input type="file" id="loadLog">
 </div>
 
+<div class="block">
+  <h3>Manual VE Input</h3>
+
+  <label>RPM Axis</label>
+  <textarea id="rpmAxis"></textarea>
+
+  <label>MAP Axis (psi)</label>
+  <textarea id="mapAxis"></textarea>
+
+  <label>VE Table</label>
+  <textarea id="veTable"></textarea>
+
+  <button id="loadManualVE">Load VE</button>
+</div>
+
+<div class="block">
+  <label>Interpolation</label>
+  <select id="mode">
+    <option value="off">Off</option>
+    <option value="soft">Soft</option>
+    <option value="hard">Hard</option>
+  </select>
+</div>
+
+<div class="block">
+  <button id="calculate">Calculate VE</button>
+</div>
+
+<pre id="debug"></pre>
+
 <script type="module" src="app.js"></script>
+
 </body>
 </html>
