@@ -3,9 +3,6 @@ export function calculateVE(log, veOld, interpMode = "off") {
   const rows = veOld.rows;
   const cols = veOld.cols;
 
-  const rpmAxis = veOld.rpm;   // из parseVE
-  const loadAxis = veOld.load; // PSI
-
   const cellCorr = Array.from({ length: rows }, () =>
     Array.from({ length: cols }, () => [])
   );
@@ -20,9 +17,12 @@ export function calculateVE(log, veOld, interpMode = "off") {
     let factor = p.afr / p.afrTarget;
     factor = clamp(factor, 0.75, 1.25);
 
-    // 🔥 ВАЖНО: биннинг по реальным осям
-    const r = findClosestIndex(loadAxis, p.map);
-    const c = findClosestIndex(rpmAxis, p.rpm);
+    // ✅ FIX 1: нормальный биннинг (round вместо floor)
+    const rFloat = mapRange(p.map, 0, 40, 0, rows - 1);
+    const cFloat = mapRange(p.rpm, 800, 7000, 0, cols - 1);
+
+    const r = clamp(Math.round(rFloat), 0, rows - 1);
+    const c = clamp(Math.round(cFloat), 0, cols - 1);
 
     cellCorr[r][c].push(factor);
     coverage[r][c]++;
@@ -32,20 +32,18 @@ export function calculateVE(log, veOld, interpMode = "off") {
 
   const veCalc = makeMatrix(rows, cols, 0);
   const corrPct = makeMatrix(rows, cols, 0);
-  const hasData = makeMatrix(rows, cols, false);
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
 
       const samples = cellCorr[r][c];
 
-      if (samples.length < 1) {
+      // ✅ FIX 2: не отбрасываем ячейки с 1-2 точками
+      if (samples.length === 0) {
         veCalc[r][c] = veOld.values[r][c];
         corrPct[r][c] = 0;
         continue;
       }
-
-      hasData[r][c] = true;
 
       const med = median(samples);
       const filtered = samples.filter(v => Math.abs(v - med) <= 0.15);
@@ -58,7 +56,7 @@ export function calculateVE(log, veOld, interpMode = "off") {
 
       const avg = filtered.reduce((a, b) => a + b, 0) / filtered.length;
 
-      // weighting (важно)
+      // ✅ FIX 3: weighting по количеству точек
       const weight = Math.min(samples.length / 5, 1);
 
       veCalc[r][c] =
@@ -68,17 +66,19 @@ export function calculateVE(log, veOld, interpMode = "off") {
     }
   }
 
+  // интерполяция (как у тебя было, не ломаем)
   let veInterp = clone(veCalc);
 
   if (interpMode === "soft")
-    veInterp = interpolateSoft(veInterp, hasData);
+    veInterp = interpolateSoft(veInterp);
 
   if (interpMode === "medium")
-    veInterp = interpolateMedium(veInterp, hasData);
+    veInterp = interpolateMedium(veInterp);
 
   if (interpMode === "hard")
-    veInterp = interpolateHard(veInterp, hasData);
+    veInterp = interpolateHard(veInterp);
 
+  // сглаживание в конце
   const veFinal = smooth(veInterp);
 
   return {
@@ -92,27 +92,9 @@ export function calculateVE(log, veOld, interpMode = "off") {
   };
 }
 
-/* ---------- BINNING ---------- */
-
-function findClosestIndex(axis, value) {
-
-  let closest = 0;
-  let minDiff = Math.abs(axis[0] - value);
-
-  for (let i = 1; i < axis.length; i++) {
-    const diff = Math.abs(axis[i] - value);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closest = i;
-    }
-  }
-
-  return closest;
-}
-
 /* ---------- SOFT ---------- */
 
-function interpolateSoft(matrix, mask) {
+function interpolateSoft(matrix) {
 
   const r = matrix.length;
   const c = matrix[0].length;
@@ -122,7 +104,7 @@ function interpolateSoft(matrix, mask) {
   for (let i = 0; i < r; i++) {
     for (let j = 0; j < c; j++) {
 
-      if (mask[i][j]) continue;
+      if (matrix[i][j] !== 0) continue;
 
       const n = [];
 
@@ -141,7 +123,7 @@ function interpolateSoft(matrix, mask) {
 
 /* ---------- MEDIUM ---------- */
 
-function interpolateMedium(matrix, mask) {
+function interpolateMedium(matrix) {
 
   const r = matrix.length;
   const c = matrix[0].length;
@@ -154,7 +136,7 @@ function interpolateMedium(matrix, mask) {
 
     for (let j = 0; j < c; j++) {
 
-      if (mask[i][j]) {
+      if (matrix[i][j] !== 0) {
 
         if (last !== null && j - last > 1) {
 
@@ -179,39 +161,32 @@ function interpolateMedium(matrix, mask) {
 
 /* ---------- HARD ---------- */
 
-function interpolateHard(matrix, mask) {
+function interpolateHard(matrix) {
 
   const r = matrix.length;
   const c = matrix[0].length;
 
-  const out = clone(matrix);
+  let out = clone(matrix);
 
-  const points = [];
+  // несколько проходов сглаживания → реально заполняет карту
+  for (let pass = 0; pass < 8; pass++) {
 
-  for (let i = 0; i < r; i++)
-    for (let j = 0; j < c; j++)
-      if (mask[i][j])
-        points.push({ i, j, v: matrix[i][j] });
+    const next = clone(out);
 
-  for (let i = 0; i < r; i++) {
-    for (let j = 0; j < c; j++) {
+    for (let i = 1; i < r - 1; i++) {
+      for (let j = 1; j < c - 1; j++) {
 
-      if (mask[i][j]) continue;
+        next[i][j] =
+          (out[i][j] +
+          out[i-1][j] +
+          out[i+1][j] +
+          out[i][j-1] +
+          out[i][j+1]) / 5;
 
-      let num = 0;
-      let den = 0;
-
-      for (const p of points) {
-
-        const d = Math.hypot(p.i - i, p.j - j) + 0.0001;
-        const w = 1 / d;
-
-        num += p.v * w;
-        den += w;
       }
-
-      out[i][j] = num / den;
     }
+
+    out = next;
   }
 
   return out;
@@ -225,6 +200,10 @@ function makeMatrix(r, c, v) {
 
 function clamp(v, a, b) {
   return Math.min(Math.max(v, a), b);
+}
+
+function mapRange(v, a, b, c, d) {
+  return (v - a) * (d - c) / (b - a) + c;
 }
 
 function median(arr) {
