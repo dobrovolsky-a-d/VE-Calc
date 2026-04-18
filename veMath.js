@@ -11,10 +11,10 @@ export function calculateVE(log, veOld, interpMode = "off") {
 
   for (let p of log) {
 
-    const mapPsi = p.map * 14.5038;
+   const mapPsi = p.map * 14.5038;
 
-    const row = findClosestIndex(rpmAxis, p.rpm);
-    const col = findClosestIndex(loadAxis, mapPsi);
+const row = findClosestIndex(rpmAxis, p.rpm);
+const col = findClosestIndex(loadAxis, mapPsi);
 
     let factor = p.afr / p.afrTarget;
     factor = clamp(factor, 0.75, 1.25);
