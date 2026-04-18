@@ -3,6 +3,9 @@ export function calculateVE(log, veOld, interpMode = "off") {
   const rows = veOld.rows;
   const cols = veOld.cols;
 
+  const rpmAxis = veOld.rpm;   // из parseVE
+  const loadAxis = veOld.load; // PSI
+
   const cellCorr = Array.from({ length: rows }, () =>
     Array.from({ length: cols }, () => [])
   );
@@ -17,8 +20,9 @@ export function calculateVE(log, veOld, interpMode = "off") {
     let factor = p.afr / p.afrTarget;
     factor = clamp(factor, 0.75, 1.25);
 
-    const r = clamp(Math.floor(mapRange(p.map, 0, 40, 0, rows - 1)), 0, rows - 1);
-    const c = clamp(Math.floor(mapRange(p.rpm, 800, 7000, 0, cols - 1)), 0, cols - 1);
+    // 🔥 ВАЖНО: биннинг по реальным осям
+    const r = findClosestIndex(loadAxis, p.map);
+    const c = findClosestIndex(rpmAxis, p.rpm);
 
     cellCorr[r][c].push(factor);
     coverage[r][c]++;
@@ -54,7 +58,12 @@ export function calculateVE(log, veOld, interpMode = "off") {
 
       const avg = filtered.reduce((a, b) => a + b, 0) / filtered.length;
 
-      veCalc[r][c] = veOld.values[r][c] * avg;
+      // weighting (важно)
+      const weight = Math.min(samples.length / 5, 1);
+
+      veCalc[r][c] =
+        veOld.values[r][c] * (1 + (avg - 1) * weight);
+
       corrPct[r][c] = (avg - 1) * 100;
     }
   }
@@ -81,6 +90,24 @@ export function calculateVE(log, veOld, interpMode = "off") {
       usedCells: usedCells.size
     }
   };
+}
+
+/* ---------- BINNING ---------- */
+
+function findClosestIndex(axis, value) {
+
+  let closest = 0;
+  let minDiff = Math.abs(axis[0] - value);
+
+  for (let i = 1; i < axis.length; i++) {
+    const diff = Math.abs(axis[i] - value);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = i;
+    }
+  }
+
+  return closest;
 }
 
 /* ---------- SOFT ---------- */
@@ -150,7 +177,7 @@ function interpolateMedium(matrix, mask) {
   return out;
 }
 
-/* ---------- HARD (distance interpolation) ---------- */
+/* ---------- HARD ---------- */
 
 function interpolateHard(matrix, mask) {
 
@@ -177,7 +204,6 @@ function interpolateHard(matrix, mask) {
       for (const p of points) {
 
         const d = Math.hypot(p.i - i, p.j - j) + 0.0001;
-
         const w = 1 / d;
 
         num += p.v * w;
@@ -191,7 +217,7 @@ function interpolateHard(matrix, mask) {
   return out;
 }
 
-/* helpers */
+/* ---------- HELPERS ---------- */
 
 function makeMatrix(r, c, v) {
   return Array.from({ length: r }, () => Array(c).fill(v));
@@ -199,10 +225,6 @@ function makeMatrix(r, c, v) {
 
 function clamp(v, a, b) {
   return Math.min(Math.max(v, a), b);
-}
-
-function mapRange(v, a, b, c, d) {
-  return (v - a) * (d - c) / (b - a) + c;
 }
 
 function median(arr) {
