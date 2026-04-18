@@ -1,4 +1,4 @@
-export function calculateVE(log, veOld, interpMode = "off") {
+export function calculateVE(log, veOld, mode = "off") {
 
   const rows = veOld.rows;
   const cols = veOld.cols;
@@ -6,86 +6,76 @@ export function calculateVE(log, veOld, interpMode = "off") {
   const rpmAxis = veOld.rpmAxis;
   const loadAxis = veOld.loadAxis;
 
-  const cellCorr = makeMatrix(rows, cols, []);
+  const cell = makeMatrix(rows, cols, []);
   const coverage = makeMatrix(rows, cols, 0);
 
+  // --- BINNING ---
   for (let p of log) {
 
-   const mapPsi = p.map * 14.5038;
+    const mapPsi = p.map * 14.5038;
 
-const row = findClosestIndex(rpmAxis, p.rpm);
-const col = findClosestIndex(loadAxis, mapPsi);
+    const r = findClosest(rpmAxis, p.rpm);
+    const c = findClosest(loadAxis, mapPsi);
 
     let factor = p.afr / p.afrTarget;
-    factor = clamp(factor, 0.75, 1.25);
 
-    cellCorr[row][col].push(factor);
-    coverage[row][col]++;
+    // clamp (защита от мусора)
+    if (factor < 0.75) factor = 0.75;
+    if (factor > 1.25) factor = 1.25;
+
+    cell[r][c].push(factor);
+    coverage[r][c]++;
   }
 
-  const veCalc = makeMatrix(rows, cols, 0);
-  const corrPct = makeMatrix(rows, cols, 0);
-  const hasData = makeMatrix(rows, cols, false);
+  // --- РАСЧЁТ ---
+  const veNew = makeMatrix(rows, cols, 0);
+  const corr = makeMatrix(rows, cols, 0);
+  const mask = makeMatrix(rows, cols, false);
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
 
-      const samples = cellCorr[r][c];
+      const samples = cell[r][c];
 
       if (!samples.length) {
-        veCalc[r][c] = veOld.values[r][c];
+        veNew[r][c] = veOld.values[r][c];
         continue;
       }
 
-      hasData[r][c] = true;
+      mask[r][c] = true;
 
-      const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+      const avg = average(samples);
 
-      const weight = Math.min(samples.length / 5, 1);
+      // weighting (чем больше точек — тем сильнее влияние)
+      const w = Math.min(samples.length / 5, 1);
 
-      veCalc[r][c] =
-        veOld.values[r][c] * (1 + (avg - 1) * weight);
+      const factor = 1 + (avg - 1) * w;
 
-      corrPct[r][c] = (avg - 1) * 100;
+      veNew[r][c] = veOld.values[r][c] * factor;
+      corr[r][c] = (factor - 1) * 100;
     }
   }
 
-  let veInterp = clone(veCalc);
+  // --- ИНТЕРПОЛЯЦИЯ ---
+  let out = clone(veNew);
 
-  if (interpMode === "soft")
-    veInterp = interpolateSoft(veInterp, hasData);
+  if (mode === "soft") {
+    out = interpolateSoft(out, mask);
+  }
 
-  if (interpMode === "medium")
-    veInterp = smooth(interpolateSoft(veInterp, hasData));
+  if (mode === "hard") {
+    out = interpolateHard(out);
+  }
 
-  if (interpMode === "hard")
-    veInterp = smoothNTimes(veInterp, 8);
-
-  const veFinal = smooth(veInterp);
+  // финальное сглаживание
+  out = smooth(out);
 
   return {
     VE_old: veOld.values,
-    VE_new: veFinal,
-    Correction: corrPct,
+    VE_new: out,
+    Correction: corr,
     coverage
   };
-}
-
-/* ---------- BINNING ---------- */
-
-function findClosestIndex(axis, value) {
-  let best = 0;
-  let min = Math.abs(axis[0] - value);
-
-  for (let i = 1; i < axis.length; i++) {
-    const d = Math.abs(axis[i] - value);
-    if (d < min) {
-      min = d;
-      best = i;
-    }
-  }
-
-  return best;
 }
 
 /* ---------- INTERPOLATION ---------- */
@@ -107,16 +97,45 @@ function interpolateSoft(m, mask) {
   return out;
 }
 
+function interpolateHard(m) {
+
+  let out = clone(m);
+
+  // много проходов сглаживания = "заливает всю карту"
+  for (let k = 0; k < 10; k++) {
+    out = smooth(out);
+  }
+
+  return out;
+}
+
 /* ---------- HELPERS ---------- */
 
-function makeMatrix(r, c, v) {
+function findClosest(axis, value) {
+  let best = 0;
+  let min = Math.abs(axis[0] - value);
+
+  for (let i = 1; i < axis.length; i++) {
+    const d = Math.abs(axis[i] - value);
+    if (d < min) {
+      min = d;
+      best = i;
+    }
+  }
+
+  return best;
+}
+
+function makeMatrix(r, c, val) {
   return Array.from({ length: r }, () =>
-    Array.from({ length: c }, () => Array.isArray(v) ? [] : v)
+    Array.from({ length: c }, () =>
+      Array.isArray(val) ? [] : val
+    )
   );
 }
 
-function clamp(v, a, b) {
-  return Math.min(Math.max(v, a), b);
+function average(arr) {
+  return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
 
 function smooth(m) {
@@ -125,6 +144,7 @@ function smooth(m) {
 
   for (let i = 1; i < m.length - 1; i++) {
     for (let j = 1; j < m[0].length - 1; j++) {
+
       out[i][j] =
         (m[i][j] +
          m[i-1][j] +
@@ -134,12 +154,6 @@ function smooth(m) {
     }
   }
 
-  return out;
-}
-
-function smoothNTimes(m, n) {
-  let out = clone(m);
-  for (let i = 0; i < n; i++) out = smooth(out);
   return out;
 }
 
