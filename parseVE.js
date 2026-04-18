@@ -1,4 +1,13 @@
-export function parseVE(text) {
+export async function parseVE(input) {
+
+  let text;
+
+  // ✅ поддержка File (из input)
+  if (input instanceof File) {
+    text = await input.text();
+  } else {
+    text = input; // уже строка
+  }
 
   const lines = text.trim().split("\n");
 
@@ -6,13 +15,8 @@ export function parseVE(text) {
     l.trim().split(/[\s,]+/).map(Number)
   );
 
-  // первая строка — RPM axis (без первого элемента)
   const rpmAxis = table[0].slice(1);
-
-  // первый столбец — load axis (psi)
   const loadAxis = table.slice(1).map(r => r[0]);
-
-  // сама VE таблица
   const values = table.slice(1).map(r => r.slice(1));
 
   return {
