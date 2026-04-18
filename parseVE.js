@@ -1,19 +1,16 @@
-export async function parseVE(input) {
+export async function parseVE(file) {
 
-  let text;
+  const text = await file.text();
 
-  // ✅ поддержка File (из input)
-  if (input instanceof File) {
-    text = await input.text();
-  } else {
-    text = input; // уже строка
-  }
-
-  const lines = text.trim().split("\n");
+  const lines = text.trim().split(/\r?\n/);
 
   const table = lines.map(l =>
-    l.trim().split(/[\s,]+/).map(Number)
+    l.trim().split(/[\t,;\s]+/).map(Number)
   );
+
+  if (table.length < 2) {
+    throw new Error("Invalid VE table");
+  }
 
   const rpmAxis = table[0].slice(1);
   const loadAxis = table.slice(1).map(r => r[0]);
@@ -22,8 +19,8 @@ export async function parseVE(input) {
   return {
     rows: values.length,
     cols: values[0].length,
-    values: values,
-    rpmAxis: rpmAxis,
-    loadAxis: loadAxis
+    values,
+    rpmAxis,
+    loadAxis
   };
 }
