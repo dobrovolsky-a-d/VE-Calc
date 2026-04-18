@@ -1,12 +1,11 @@
 import { parseLog } from "./parseLog.js";
-import { parseVE } from "./parseVE.js";
+import { parseVEFromText } from "./parseVEfromText.js";
 import { calculateVE } from "./veMath.js";
 
 let logData = null;
 let veOld = null;
 
 const debug = document.getElementById("debug");
-const output = document.getElementById("output");
 
 function setDebug(t) {
   debug.textContent = t;
@@ -15,37 +14,42 @@ function setDebug(t) {
 /* LOAD LOG */
 document.getElementById("loadLog").addEventListener("change", async (e) => {
   try {
-    const file = e.target.files[0];
-    logData = await parseLog(file);
-
-    setDebug(`Log loaded: ${logData.length} rows`);
-
+    logData = await parseLog(e.target.files[0]);
+    setDebug("Log loaded: " + logData.length);
   } catch (err) {
     setDebug("Log error:\n" + err.message);
   }
 });
 
 /* LOAD VE */
-document.getElementById("loadVE").addEventListener("change", async (e) => {
+document.getElementById("loadManualVE").addEventListener("click", () => {
+
   try {
-    veOld = await parseVE(e.target.files[0]);
+    const rpm = document.getElementById("rpmAxis").value;
+    const map = document.getElementById("mapAxis").value;
+    const ve  = document.getElementById("veTable").value;
 
-    setDebug(`VE loaded: ${veOld.rows}x${veOld.cols}`);
+    veOld = parseVEFromText(rpm, map, ve);
 
-  } catch (err) {
-    setDebug("VE error:\n" + err.message);
+    setDebug("VE loaded: " + veOld.rows + "x" + veOld.cols);
+
+  } catch (e) {
+    setDebug("VE error:\n" + e.message);
   }
+
 });
 
 /* CALCULATE */
 document.getElementById("calculate").addEventListener("click", () => {
 
   if (!logData || !veOld) {
-    setDebug("Load log and VE first");
+    setDebug("Load log and VE");
     return;
   }
 
-  const res = calculateVE(logData, veOld, "hard");
+  const mode = document.getElementById("mode").value;
+
+  const res = calculateVE(logData, veOld, mode);
 
   console.log(res);
 
