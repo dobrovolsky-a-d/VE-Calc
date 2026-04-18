@@ -35,7 +35,7 @@ export function calculateVE(log, veOld, interpMode = "off") {
 
       const samples = cellCorr[r][c];
 
-      if (samples.length < 3) {
+      if (samples.length < 1) {
         veCalc[r][c] = veOld.values[r][c];
         corrPct[r][c] = 0;
         continue;
