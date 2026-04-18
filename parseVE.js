@@ -8,32 +8,32 @@ export async function parseVE(file) {
     .filter(l => l.length > 0);
 
   const table = lines.map(line =>
-    line
-      .split(/[\t ]+/) // ✅ TAB + пробелы
-      .map(v => parseFloat(v))
-      .filter(v => !isNaN(v)) // убираем мусор
+    line.split(/\t+/).map(v => v.trim())
   );
 
-  if (table.length < 2) {
-    throw new Error("VE parse failed: not enough data");
-  }
+  // первая строка: ["RPM / MAP (psi)", "5.02", "6.96", ...]
+  const loadAxis = table[0]
+    .slice(1)
+    .map(v => parseFloat(v));
 
-  // первая строка = rpm axis
-  const rpmAxis = table[0].slice(1);
+  // первая колонка: rpm
+  const rpmAxis = table
+    .slice(1)
+    .map(row => parseFloat(row[0]));
 
-  // первый столбец = load axis
-  const loadAxis = table.slice(1).map(r => r[0]);
+  // значения VE
+  const values = table
+    .slice(1)
+    .map(row =>
+      row.slice(1).map(v => parseFloat(v))
+    );
 
-  // сама таблица
-  const values = table.slice(1).map(r => r.slice(1));
-
-  if (values[0].length === 0) {
-    throw new Error("VE parse failed: columns = 0");
+  if (!values.length || !values[0].length) {
+    throw new Error("VE parse failed");
   }
 
   console.log("RPM axis:", rpmAxis);
   console.log("Load axis:", loadAxis);
-  console.log("Cols:", values[0].length);
 
   return {
     rows: values.length,
