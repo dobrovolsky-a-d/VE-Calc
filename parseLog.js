@@ -3,15 +3,32 @@ export async function parseLog(file) {
   const text = await file.text();
   const lines = text.split(/\r?\n/);
 
-  const header = lines[0].split(",");
+  // 🔥 чистим header
+  const clean = s =>
+    s.replace(/["']/g, "").trim().toLowerCase();
 
-  const rpmIndex = header.indexOf("Engine Speed (rpm)");
-  const mapIndex = header.indexOf("Manifold Absolute Pressure (bar)");
-  const targetIndex = header.indexOf("Primary Open Loop Map Enrichment* (estimated AFR)");
-  const afrIndex = header.findIndex(h => h.includes("AEM UEGO"));
+  const headerRaw = lines[0].split(",");
+  const header = headerRaw.map(clean);
+
+  function findExact(name) {
+    const target = clean(name);
+    return header.findIndex(h => h === target);
+  }
+
+  const rpmIndex = findExact("Engine Speed (rpm)");
+  const mapIndex = findExact("Manifold Absolute Pressure (bar)");
+  const targetIndex = findExact("Primary Open Loop Map Enrichment* (estimated AFR)");
+
+  // wideband ищем по ключу
+  const afrIndex = header.findIndex(h =>
+    h.includes("uego") || h.includes("aem")
+  );
+
+  console.log("HEADER:", headerRaw);
+  console.log("INDEXES:", { rpmIndex, mapIndex, targetIndex, afrIndex });
 
   if (rpmIndex === -1 || mapIndex === -1 || afrIndex === -1 || targetIndex === -1) {
-    throw new Error("Missing required columns");
+    throw new Error("Missing required columns — смотри console");
   }
 
   const result = [];
@@ -21,7 +38,7 @@ export async function parseLog(file) {
     const row = lines[i].split(",");
 
     const rpm = parseFloat(row[rpmIndex]);
-    const mapBar = parseFloat(row[mapIndex]); // абсолютное давление
+    const mapBar = parseFloat(row[mapIndex]);
     const afr = parseFloat(row[afrIndex]);
     const afrTarget = parseFloat(row[targetIndex]);
 
@@ -29,7 +46,7 @@ export async function parseLog(file) {
 
     result.push({
       rpm,
-      map: mapBar,   // остаётся absolute BAR
+      map: mapBar,   // absolute bar
       afr,
       afrTarget
     });
