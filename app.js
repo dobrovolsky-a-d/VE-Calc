@@ -60,9 +60,9 @@ document.getElementById("loadManualVE").onclick = () => {
   try {
 
     veOld = parseVEFromText(
-      rpmAxis.value,
-      mapAxis.value,
-      veTable.value
+      document.getElementById("rpmAxis").value,
+      document.getElementById("mapAxis").value,
+      document.getElementById("veTable").value
     );
 
     setDebug(`VE loaded: ${veOld.rows} x ${veOld.cols}`);
@@ -72,34 +72,26 @@ document.getElementById("loadManualVE").onclick = () => {
   }
 };
 
-/* ---------- COVERAGE ONLY ---------- */
+/* ---------- COVERAGE ---------- */
 document.getElementById("showCoverage").onclick = () => {
 
-  try {
-
-    if (!logData) {
-      setDebug("Load logs first");
-      return;
-    }
-
-    // временная сетка (без VE)
-    const rpmAxis = autoAxis(logData.map(p => p.rpm), 18);
-    const loadAxis = autoAxis(logData.map(p => p.map * 14.5), 18);
-
-    const coverage = buildCoverage(logData, rpmAxis, loadAxis);
-
-    out.innerHTML = "";
-    out.appendChild(makeCoverage(coverage));
-
-    setDebug("Coverage built (auto axes)");
-
-  } catch (e) {
-    console.error(e);
-    setDebug("COVERAGE ERROR:\n" + e.message);
+  if (!logData) {
+    setDebug("Load logs first");
+    return;
   }
+
+  const rpmAxis = autoAxis(logData.map(p => p.rpm), 18);
+  const loadAxis = autoAxis(logData.map(p => p.map * 14.5), 18);
+
+  const coverage = buildCoverage(logData, rpmAxis, loadAxis);
+
+  out.innerHTML = "";
+  out.appendChild(makeCoverage(coverage));
+
+  setDebug("Coverage built");
 };
 
-/* ---------- CALCULATE VE ---------- */
+/* ---------- CALCULATE ---------- */
 document.getElementById("calculate").onclick = () => {
 
   try {
@@ -109,7 +101,9 @@ document.getElementById("calculate").onclick = () => {
       return;
     }
 
-    const res = calculateVE(logData, veOld);
+    const mode = document.getElementById("mode").value;
+
+    const res = calculateVE(logData, veOld, mode);
 
     out.innerHTML = "";
 
@@ -118,7 +112,7 @@ document.getElementById("calculate").onclick = () => {
     out.appendChild(makeTable("CORR %", res.Correction));
     out.appendChild(makeCoverage(res.coverage));
 
-    setDebug("VE calculated");
+    setDebug("Done");
 
   } catch (e) {
     console.error(e);
@@ -126,59 +120,36 @@ document.getElementById("calculate").onclick = () => {
   }
 };
 
-/* ---------- AUTO AXIS ---------- */
+/* ---------- HELPERS ---------- */
 
 function autoAxis(values, bins){
-
   const min = Math.min(...values);
   const max = Math.max(...values);
-
   const step = (max - min) / (bins - 1);
-
-  const axis = [];
-
-  for (let i = 0; i < bins; i++){
-    axis.push(min + step * i);
-  }
-
-  return axis;
+  return Array.from({length: bins}, (_,i)=>min + step*i);
 }
-
-/* ---------- COVERAGE ---------- */
 
 function buildCoverage(log, rpmAxis, loadAxis){
 
-  const rows = rpmAxis.length;
-  const cols = loadAxis.length;
-
-  const cov = Array.from({length:rows},()=>Array(cols).fill(0));
+  const cov = Array.from({length:rpmAxis.length},()=>Array(loadAxis.length).fill(0));
 
   for (let p of log){
-
     const mapPsi = p.map * 14.5038;
-
     const r = findClosest(rpmAxis, p.rpm);
     const c = findClosest(loadAxis, mapPsi);
-
     cov[r][c]++;
   }
 
   return cov;
 }
 
-function findClosest(axis, value){
-
-  let best = 0;
-  let min = Math.abs(axis[0] - value);
-
-  for (let i=1;i<axis.length;i++){
-    const d = Math.abs(axis[i]-value);
-    if (d<min){
-      min=d;
-      best=i;
-    }
+function findClosest(axis,val){
+  let best=0;
+  let min=Math.abs(axis[0]-val);
+  for(let i=1;i<axis.length;i++){
+    const d=Math.abs(axis[i]-val);
+    if(d<min){min=d;best=i;}
   }
-
   return best;
 }
 
