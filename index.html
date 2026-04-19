@@ -23,16 +23,25 @@
   <h3>Manual VE Input</h3>
 
   <label>RPM Axis</label>
-  <textarea id="rpmAxis" placeholder="800 1200 1600 ..."></textarea>
+  <textarea id="rpmAxis"></textarea>
 
   <label>MAP Axis (psi)</label>
-  <textarea id="mapAxis" placeholder="5 7 9 11 13 ..."></textarea>
+  <textarea id="mapAxis"></textarea>
 
   <label>VE Table</label>
-  <textarea id="veTable" placeholder="69 77 82 ...
-65 74 79 ..."></textarea>
+  <textarea id="veTable"></textarea>
 
   <button id="loadManualVE">Load VE</button>
+</div>
+
+<!-- INTERPOLATION -->
+<div class="card">
+  <label>Interpolation</label>
+  <select id="mode">
+    <option value="off">Off</option>
+    <option value="soft">Soft</option>
+    <option value="hard">Hard</option>
+  </select>
 </div>
 
 <!-- CALC -->
@@ -40,11 +49,8 @@
   <button id="calculate">Calculate VE</button>
 </div>
 
-<!-- OUTPUT -->
 <div id="output"></div>
 
-<!-- SCRIPT -->
 <script type="module" src="app.js"></script>
-
 </body>
 </html>
