@@ -103,7 +103,9 @@ document.getElementById("calculate").onclick = () => {
 
     const mode = document.getElementById("mode").value;
 
-    const res = calculateVE(logData, veOld, mode);
+ const minSamples = 3; // 🔥 можешь потом сделать UI
+
+const res = calculateVE(logData, veOld, mode, minSamples);
 
     out.innerHTML = "";
 
