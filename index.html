@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>VE Calculator</title>
@@ -9,41 +9,42 @@
 
 <h1>VE Calculator</h1>
 
+<!-- LOG -->
 <div class="card">
-  <h3>Log</h3>
-  <input type="file" id="loadLog">
+  <h3>Logs</h3>
+  <input type="file" id="loadLog" multiple>
+  <div style="margin-top:10px;">
+    <button id="showCoverage">Show Log Coverage</button>
+  </div>
 </div>
 
+<!-- VE INPUT -->
 <div class="card">
-  <h3>Manual VE</h3>
+  <h3>Manual VE Input</h3>
 
   <label>RPM Axis</label>
-  <textarea id="rpmAxis"></textarea>
+  <textarea id="rpmAxis" placeholder="800 1200 1600 ..."></textarea>
 
   <label>MAP Axis (psi)</label>
-  <textarea id="mapAxis"></textarea>
+  <textarea id="mapAxis" placeholder="5 7 9 11 13 ..."></textarea>
 
   <label>VE Table</label>
-  <textarea id="veTable"></textarea>
+  <textarea id="veTable" placeholder="69 77 82 ...
+65 74 79 ..."></textarea>
 
   <button id="loadManualVE">Load VE</button>
 </div>
 
+<!-- CALC -->
 <div class="card">
-  <label>Interpolation</label>
-  <select id="mode">
-    <option value="off">Off</option>
-    <option value="soft">Soft</option>
-    <option value="hard">Hard</option>
-  </select>
+  <button id="calculate">Calculate VE</button>
 </div>
 
-<div class="card">
-  <button id="calculate">Calculate</button>
-</div>
-
+<!-- OUTPUT -->
 <div id="output"></div>
 
+<!-- SCRIPT -->
 <script type="module" src="app.js"></script>
+
 </body>
 </html>
