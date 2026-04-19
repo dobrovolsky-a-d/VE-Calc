@@ -9,10 +9,10 @@ export function calculateVE(log, veOld, mode="off") {
   const coverage = makeMatrix(rows, cols, 0);
   const mask = makeMatrix(rows, cols, false);
 
-  // --- BILINEAR BINNING ---
+  // --- BILINEAR ---
   for (let p of log) {
 
-   const mapPsi = p.map; // уже psi
+    const mapPsi = p.map;
 
     const r = findBounds(rpmAxis, p.rpm);
     const c = findBounds(loadAxis, mapPsi);
@@ -37,7 +37,6 @@ export function calculateVE(log, veOld, mode="off") {
     }
   }
 
-  // --- BASE CALC ---
   let out = makeMatrix(rows, cols, 0);
   const corr = makeMatrix(rows, cols, 0);
 
@@ -59,6 +58,7 @@ export function calculateVE(log, veOld, mode="off") {
   // --- INTERPOLATION ---
   if (mode === "soft") out = interpolateSoft(out, mask);
   if (mode === "hard") out = smoothNTimes(out, 8);
+  if (mode === "engine") out = engineInterpolation(out, mask);
 
   out = smooth(out);
 
@@ -70,7 +70,45 @@ export function calculateVE(log, veOld, mode="off") {
   };
 }
 
-/* ---------- INTERPOLATION ---------- */
+/* ================= ENGINE INTERPOLATION ================= */
+
+function engineInterpolation(m, mask){
+
+  const out = clone(m);
+
+  for (let i=0;i<m.length;i++){
+    for (let j=0;j<m[0].length;j++){
+
+      if (mask[i][j]) continue;
+
+      const neighbors = [];
+
+      // вверх / вниз (rpm)
+      if (i > 0) neighbors.push(m[i-1][j]);
+      if (i < m.length-1) neighbors.push(m[i+1][j]);
+
+      // лево / право (load)
+      if (j > 0) neighbors.push(m[i][j-1]);
+      if (j < m[0].length-1) neighbors.push(m[i][j+1]);
+
+      if (neighbors.length === 0) continue;
+
+      const avg = neighbors.reduce((a,b)=>a+b,0)/neighbors.length;
+
+      // 🔥 bias в сторону нагрузки
+      let loadBias = 0;
+      if (j > 0 && j < m[0].length-1) {
+        loadBias = (m[i][j+1] - m[i][j-1]) * 0.3;
+      }
+
+      out[i][j] = avg + loadBias;
+    }
+  }
+
+  return out;
+}
+
+/* ================= OLD ================= */
 
 function interpolateSoft(m, mask){
 
@@ -117,7 +155,7 @@ function smoothNTimes(m,n){
   return out;
 }
 
-/* ---------- HELPERS ---------- */
+/* ================= HELPERS ================= */
 
 function findBounds(axis,val){
   for (let i=0;i<axis.length-1;i++){
