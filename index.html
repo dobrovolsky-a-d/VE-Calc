@@ -2,20 +2,20 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>VE Calc</title>
+  <title>VE Calculator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <h1>VE Calculator</h1>
 
-<div class="block">
-  <h3>Load Log</h3>
+<div class="card">
+  <h3>Log</h3>
   <input type="file" id="loadLog">
 </div>
 
-<div class="block">
-  <h3>Manual VE Input</h3>
+<div class="card">
+  <h3>Manual VE</h3>
 
   <label>RPM Axis</label>
   <textarea id="rpmAxis"></textarea>
@@ -29,7 +29,7 @@
   <button id="loadManualVE">Load VE</button>
 </div>
 
-<div class="block">
+<div class="card">
   <label>Interpolation</label>
   <select id="mode">
     <option value="off">Off</option>
@@ -38,13 +38,12 @@
   </select>
 </div>
 
-<div class="block">
-  <button id="calculate">Calculate VE</button>
+<div class="card">
+  <button id="calculate">Calculate</button>
 </div>
 
-<pre id="debug"></pre>
+<div id="output"></div>
 
 <script type="module" src="app.js"></script>
-
 </body>
 </html>
