@@ -43,10 +43,13 @@ export function calculateVE(log, veOld, mode="off") {
   for (let i=0;i<rows;i++){
     for (let j=0;j<cols;j++){
 
-      if (weight[i][j] === 0){
-        out[i][j] = veOld.values[i][j];
-        continue;
-      }
+  if (coverage[i][j] < MIN_SAMPLES){
+
+  // не доверяем этим данным
+  out[i][j] = veOld.values[i][j];
+  mask[i][j] = false; // 🔥 важно — не считаем как валидную точку
+  continue;
+}
 
       const avg = sum[i][j]/weight[i][j];
 
