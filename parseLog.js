@@ -25,9 +25,15 @@ export async function parseLog(file) {
     const afrTarget = +row[targetIndex];
     const tps = +row[tpsIndex];
 
-    if (!rpm || !map || !afr || !afrTarget) continue;
+ if (
+  isNaN(rpm) ||
+  isNaN(map) ||
+  isNaN(afr) ||
+  isNaN(afrTarget)
+) continue;
 
-    if (tps <= 0) continue; // 🔥 фильтр
+// мягкий фильтр TPS
+if (!isNaN(tps) && tps < 1) continue;
 
     result.push({ rpm, map, afr, afrTarget });
   }
