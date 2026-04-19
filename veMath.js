@@ -1,4 +1,4 @@
-export function calculateVE(log, veOld, mode="off") {
+export function calculateVE(log, veOld, mode="off", MIN_SAMPLES=3) {
 
   const { rpmAxis, loadAxis } = veOld;
   const rows = veOld.rows;
@@ -33,28 +33,27 @@ export function calculateVE(log, veOld, mode="off") {
       sum[i][j]+=factor*w;
       weight[i][j]+=w;
       coverage[i][j]++;
-      mask[i][j] = true;
     }
   }
 
   let out = makeMatrix(rows, cols, 0);
   const corr = makeMatrix(rows, cols, 0);
 
+  // --- BASE CALC + FILTER ---
   for (let i=0;i<rows;i++){
     for (let j=0;j<cols;j++){
 
-  if (coverage[i][j] < MIN_SAMPLES){
-
-  // не доверяем этим данным
-  out[i][j] = veOld.values[i][j];
-  mask[i][j] = false; // 🔥 важно — не считаем как валидную точку
-  continue;
-}
+      if (coverage[i][j] < MIN_SAMPLES){
+        out[i][j] = veOld.values[i][j];
+        mask[i][j] = false;
+        continue;
+      }
 
       const avg = sum[i][j]/weight[i][j];
 
       out[i][j] = veOld.values[i][j]*avg;
       corr[i][j] = (avg-1)*100;
+      mask[i][j] = true;
     }
   }
 
@@ -73,7 +72,7 @@ export function calculateVE(log, veOld, mode="off") {
   };
 }
 
-/* ================= ENGINE INTERPOLATION ================= */
+/* ================= ENGINE ================= */
 
 function engineInterpolation(m, mask){
 
@@ -86,21 +85,20 @@ function engineInterpolation(m, mask){
 
       const neighbors = [];
 
-      // вверх / вниз (rpm)
-      if (i > 0) neighbors.push(m[i-1][j]);
-      if (i < m.length-1) neighbors.push(m[i+1][j]);
-
-      // лево / право (load)
-      if (j > 0) neighbors.push(m[i][j-1]);
-      if (j < m[0].length-1) neighbors.push(m[i][j+1]);
+      if (i > 0 && mask[i-1][j]) neighbors.push(m[i-1][j]);
+      if (i < m.length-1 && mask[i+1][j]) neighbors.push(m[i+1][j]);
+      if (j > 0 && mask[i][j-1]) neighbors.push(m[i][j-1]);
+      if (j < m[0].length-1 && mask[i][j+1]) neighbors.push(m[i][j+1]);
 
       if (neighbors.length === 0) continue;
 
       const avg = neighbors.reduce((a,b)=>a+b,0)/neighbors.length;
 
-      // 🔥 bias в сторону нагрузки
       let loadBias = 0;
-      if (j > 0 && j < m[0].length-1) {
+      if (
+        j > 0 && j < m[0].length-1 &&
+        mask[i][j-1] && mask[i][j+1]
+      ){
         loadBias = (m[i][j+1] - m[i][j-1]) * 0.3;
       }
 
@@ -111,7 +109,7 @@ function engineInterpolation(m, mask){
   return out;
 }
 
-/* ================= OLD ================= */
+/* ================= SOFT ================= */
 
 function interpolateSoft(m, mask){
 
@@ -122,16 +120,23 @@ function interpolateSoft(m, mask){
 
       if (mask[i][j]) continue;
 
-      out[i][j] =
-        (m[i-1][j] +
-         m[i+1][j] +
-         m[i][j-1] +
-         m[i][j+1]) / 4;
+      const vals = [];
+
+      if (mask[i-1][j]) vals.push(m[i-1][j]);
+      if (mask[i+1][j]) vals.push(m[i+1][j]);
+      if (mask[i][j-1]) vals.push(m[i][j-1]);
+      if (mask[i][j+1]) vals.push(m[i][j+1]);
+
+      if (vals.length === 0) continue;
+
+      out[i][j] = vals.reduce((a,b)=>a+b,0)/vals.length;
     }
   }
 
   return out;
 }
+
+/* ================= SMOOTH ================= */
 
 function smooth(m){
 
