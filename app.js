@@ -2,97 +2,87 @@ import { parseLog } from "./parseLog.js";
 import { parseVEFromText } from "./parseVEfromText.js";
 import { calculateVE } from "./veMath.js";
 
-let logData = null;
-let veOld = null;
+let logData=null;
+let veOld=null;
 
-const debug = document.getElementById("debug");
+const out=document.getElementById("output");
 
-function setDebug(t) {
-  debug.textContent = t;
-}
+document.getElementById("loadLog").onchange=async e=>{
+  logData=await parseLog(e.target.files[0]);
+};
 
-/* LOAD LOG */
-document.getElementById("loadLog").addEventListener("change", async (e) => {
-  try {
-    logData = await parseLog(e.target.files[0]);
-    setDebug("Log loaded: " + logData.length);
-  } catch (err) {
-    setDebug("Log error:\n" + err.message);
-  }
-});
+document.getElementById("loadManualVE").onclick=()=>{
+  veOld=parseVEFromText(
+    rpmAxis.value,
+    mapAxis.value,
+    veTable.value
+  );
+};
 
-/* LOAD VE */
-document.getElementById("loadManualVE").addEventListener("click", () => {
+document.getElementById("calculate").onclick=()=>{
 
-  try {
-    const rpm = document.getElementById("rpmAxis").value;
-    const map = document.getElementById("mapAxis").value;
-    const ve  = document.getElementById("veTable").value;
+  const res=calculateVE(logData,veOld);
 
-    veOld = parseVEFromText(rpm, map, ve);
+  out.innerHTML="";
 
-    setDebug("VE loaded: " + veOld.rows + "x" + veOld.cols);
+  out.appendChild(makeTable("VE OLD",res.VE_old));
+  out.appendChild(makeTable("VE NEW",res.VE_new,res.VE_old));
+  out.appendChild(makeTable("CORR %",res.Correction));
+  out.appendChild(makeCoverage(res.coverage));
+};
 
-  } catch (e) {
-    setDebug("VE error:\n" + e.message);
-  }
+function makeTable(title,data,base=null){
 
-});
+  const div=document.createElement("div");
+  div.innerHTML=`<h3>${title}</h3>`;
 
-/* CALCULATE */
-document.getElementById("calculate").addEventListener("click", () => {
+  const t=document.createElement("table");
 
-  if (!logData || !veOld) {
-    setDebug("Load log and VE");
-    return;
-  }
+  data.forEach((r,i)=>{
+    const tr=document.createElement("tr");
 
-  const mode = document.getElementById("mode").value;
-const res = calculateVE(logData, veOld, mode);
+    r.forEach((v,j)=>{
+      const td=document.createElement("td");
+      td.textContent=v.toFixed(1);
 
-renderResult(res);
+      if(base && Math.abs(v-base[i][j])>0.1){
+        td.classList.add("changed");
+      }
 
-setDebug("Done.");
-});
-
-function renderResult(res) {
-
-  debug.textContent = "";
-
-  const container = document.createElement("div");
-
-  container.appendChild(makeTable("VE OLD", res.VE_old));
-  container.appendChild(makeTable("VE NEW", res.VE_new));
-  container.appendChild(makeTable("CORR %", res.Correction));
-  container.appendChild(makeTable("COVERAGE", res.coverage));
-
-  document.body.appendChild(container);
-}
-
-function makeTable(title, data) {
-
-  const wrapper = document.createElement("div");
-
-  const h = document.createElement("h3");
-  h.textContent = title;
-  wrapper.appendChild(h);
-
-  const table = document.createElement("table");
-
-  data.forEach(row => {
-    const tr = document.createElement("tr");
-
-    row.forEach(v => {
-      const td = document.createElement("td");
-      td.textContent = Number(v).toFixed(1);
-      td.style.padding = "4px";
-      td.style.border = "1px solid #444";
       tr.appendChild(td);
     });
 
-    table.appendChild(tr);
+    t.appendChild(tr);
   });
 
-  wrapper.appendChild(table);
-  return wrapper;
+  div.appendChild(t);
+  return div;
+}
+
+function makeCoverage(data){
+
+  const div=document.createElement("div");
+  div.innerHTML="<h3>COVERAGE</h3>";
+
+  const t=document.createElement("table");
+
+  data.forEach(r=>{
+    const tr=document.createElement("tr");
+
+    r.forEach(v=>{
+      const td=document.createElement("td");
+      td.textContent=v;
+
+      if(v>50) td.className="cover-high";
+      else if(v>10) td.className="cover-mid";
+      else if(v>0) td.className="cover-low";
+
+      tr.appendChild(td);
+    });
+
+    t.appendChild(tr);
+  });
+
+  div.appendChild(t);
+  return div;
 }
