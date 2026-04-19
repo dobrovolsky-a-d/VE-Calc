@@ -12,7 +12,7 @@ export function calculateVE(log, veOld, mode="off") {
   // --- BILINEAR BINNING ---
   for (let p of log) {
 
-    const mapPsi = p.map * 14.5038;
+   const mapPsi = p.map; // уже psi
 
     const r = findBounds(rpmAxis, p.rpm);
     const c = findBounds(loadAxis, mapPsi);
