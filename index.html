@@ -38,10 +38,15 @@
     <option value="hard">Hard</option>
     <option value="engine">Engine (recommended)</option>
   </select>
+
+  <label style="margin-left: 20px;">Min Samples</label>
+  <input type="number" id="minSamples" value="3" min="1" max="50"
+    style="width:60px; margin-left:8px; padding:5px; border-radius:6px; border:1px solid #ccc;">
 </div>
 
-<div class="card">
+<div class="card" style="display:flex; gap:10px;">
   <button id="calculate">Calculate VE</button>
+  <button id="exportBtn" style="background:#28a745;">Export VE (RomRaider)</button>
 </div>
 
 <div id="output"></div>
