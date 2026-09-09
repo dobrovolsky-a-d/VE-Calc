@@ -10,6 +10,13 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask) {
   container.innerHTML = "";
   container.style.cssText = "width:100%;height:500px;position:relative;background:#1a1a2e;border-radius:10px;overflow:hidden;";
 
+  // Кнопка закрыть
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "✕ Закрыть";
+  closeBtn.style.cssText = "position:absolute;top:10px;right:15px;z-index:10;background:rgba(255,255,255,0.15);color:white;border:1px solid rgba(255,255,255,0.3);border-radius:6px;padding:4px 12px;cursor:pointer;font-size:13px;";
+  closeBtn.onclick = () => { container.style.display = "none"; };
+  container.appendChild(closeBtn);
+
   // --- Three.js через CDN ---
   const script = document.createElement("script");
   script.src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
@@ -151,7 +158,7 @@ function init3D(container, veMatrix, rpmAxis, loadAxis, mask) {
   scene.add(wire);
 
   // --- Оси ---
-  addAxes(scene, THREE, rpmAxis, loadAxis, veMin, veMax, scaleX, scaleZ, scaleY, offsetX, offsetZ, rows, cols);
+  addAxes(scene, THREE, rpmAxis, loadAxis, veMin, veMax, scaleX, scaleZ, scaleY, offsetX, offsetZ, rows, cols, renderer, camera, container);
 
   // --- Colorbar ---
   addColorbar(container, veMin, veMax);
@@ -227,6 +234,7 @@ function init3D(container, veMatrix, rpmAxis, loadAxis, mask) {
   function animate() {
     requestAnimationFrame(animate);
     renderer.render(scene, camera);
+    if (renderer._updateLabels) renderer._updateLabels();
   }
   animate();
 }
@@ -235,56 +243,94 @@ function init3D(container, veMatrix, rpmAxis, loadAxis, mask) {
    ОСИ И ПОДПИСИ
    ============================================================ */
 
-function addAxes(scene, THREE, rpmAxis, loadAxis, veMin, veMax, scaleX, scaleZ, scaleY, offsetX, offsetZ, rows, cols) {
-
-  const matLine = new THREE.LineBasicMaterial({ color: 0x444466 });
+function addAxes(scene, THREE, rpmAxis, loadAxis, veMin, veMax, scaleX, scaleZ, scaleY, offsetX, offsetZ, rows, cols, renderer, camera, container) {
 
   // Сетка дна
   const gridHelper = new THREE.GridHelper(30, 10, 0x333355, 0x222244);
   gridHelper.position.y = 0;
   scene.add(gridHelper);
 
-  // Подписи на осях через спрайты
-  const canvas = document.createElement("canvas");
-  canvas.width  = 256;
-  canvas.height = 64;
-  const ctx = canvas.getContext("2d");
-
-  function makeLabel(text, x, y, z) {
-    ctx.clearRect(0, 0, 256, 64);
-    ctx.fillStyle = "rgba(0,0,0,0)";
-    ctx.fillRect(0, 0, 256, 64);
-    ctx.font = "bold 28px system-ui";
-    ctx.fillStyle = "#aaaacc";
-    ctx.textAlign = "center";
-    ctx.fillText(text, 128, 42);
-
-    const tex = new THREE.CanvasTexture(canvas);
-    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
-    const sprite = new THREE.Sprite(mat);
-    sprite.position.set(x, y, z);
-    sprite.scale.set(6, 1.5, 1);
-    scene.add(sprite);
+  // Линии осей
+  function makeLine(points, color) {
+    const geo = new THREE.BufferGeometry().setFromPoints(points.map(p => new THREE.Vector3(...p)));
+    const mat = new THREE.LineBasicMaterial({ color });
+    scene.add(new THREE.Line(geo, mat));
   }
 
-  // RPM подписи (ось Z)
-  const rpmStep = Math.max(1, Math.floor(rows / 5));
+  const maxY = (veMax - veMin) * scaleY;
+  makeLine([[offsetX, 0, offsetZ], [offsetX, maxY, offsetZ]], 0x8888ff); // VE ось
+  makeLine([[offsetX, 0, offsetZ], [15, 0, offsetZ]], 0xff8844);          // MAP ось
+  makeLine([[offsetX, 0, offsetZ], [offsetX, 0, 15]], 0x44ff88);          // RPM ось
+
+  // --- HTML overlay для подписей ---
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;";
+  container.appendChild(overlay);
+
+  // Точки 3D которые надо подписать
+  const labelPoints = [];
+
+  // RPM подписи
+  const rpmStep = Math.max(1, Math.floor(rows / 6));
   for (let i = 0; i < rows; i += rpmStep) {
     const z = i * scaleZ + offsetZ;
-    makeLabel(Math.round(rpmAxis[i]).toString(), offsetX - 4, -0.5, z);
+    labelPoints.push({ pos: new THREE.Vector3(offsetX - 1, 0, z), text: Math.round(rpmAxis[i]) + "", color: "#88ff99" });
   }
 
-  // MAP подписи (ось X)
-  const mapStep = Math.max(1, Math.floor(cols / 5));
+  // MAP подписи
+  const mapStep = Math.max(1, Math.floor(cols / 6));
   for (let j = 0; j < cols; j += mapStep) {
     const x = j * scaleX + offsetX;
-    makeLabel(loadAxis[j].toFixed(1), x, -0.5, 15 + 4);
+    labelPoints.push({ pos: new THREE.Vector3(x, 0, 16), text: loadAxis[j].toFixed(1), color: "#ffaa66" });
   }
 
-  // Название осей
-  makeLabel("RPM →", offsetX - 6, 2, 0);
-  makeLabel("MAP (psi) →", 0, -0.5, 20);
-  makeLabel("VE %", offsetX - 6, (veMax - veMin) * scaleY / 2, offsetZ - 4);
+  // VE подписи по высоте
+  const veSteps = 5;
+  for (let k = 0; k <= veSteps; k++) {
+    const ve = veMin + (veMax - veMin) * k / veSteps;
+    const y  = (ve - veMin) * scaleY;
+    labelPoints.push({ pos: new THREE.Vector3(offsetX - 1, y, offsetZ - 1), text: ve.toFixed(0) + "%", color: "#aaaaff" });
+  }
+
+  // Названия осей
+  labelPoints.push({ pos: new THREE.Vector3(offsetX - 3, 1, 0),   text: "RPM", color: "#44ff88", bold: true });
+  labelPoints.push({ pos: new THREE.Vector3(0, 0, 18),             text: "MAP psi", color: "#ff8844", bold: true });
+  labelPoints.push({ pos: new THREE.Vector3(offsetX - 3, maxY + 1, offsetZ), text: "VE %", color: "#8888ff", bold: true });
+
+  // Обновляем позиции подписей при каждом кадре
+  const labelEls = labelPoints.map(lp => {
+    const el = document.createElement("div");
+    el.textContent = lp.text;
+    el.style.cssText = `
+      position:absolute;
+      color:${lp.color};
+      font-size:${lp.bold ? "12px" : "10px"};
+      font-weight:${lp.bold ? "bold" : "normal"};
+      font-family:system-ui,monospace;
+      white-space:nowrap;
+      text-shadow:0 0 4px #000, 0 0 2px #000;
+      transform:translate(-50%,-50%);
+    `;
+    overlay.appendChild(el);
+    return el;
+  });
+
+  // Экспортируем функцию обновления — вызывается из render loop
+  renderer._updateLabels = () => {
+    const W = container.clientWidth;
+    const H = container.clientHeight;
+
+    labelPoints.forEach((lp, idx) => {
+      const v = lp.pos.clone().project(camera);
+      const x = (v.x * 0.5 + 0.5) * W;
+      const y = (-v.y * 0.5 + 0.5) * H;
+
+      // Прячем если за камерой
+      labelEls[idx].style.display = (v.z > 1) ? "none" : "block";
+      labelEls[idx].style.left = x + "px";
+      labelEls[idx].style.top  = y + "px";
+    });
+  };
 }
 
 /* ============================================================
