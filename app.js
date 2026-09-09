@@ -340,10 +340,11 @@ function makeAnomalyReport(anomalies, threshold) {
 
   anomalies.forEach(a => {
     const tr = document.createElement("tr");
-    [a.rpm, a.map, a.oldVal, a.newVal, (a.delta > 0 ? "+" : "") + a.delta + "%"].forEach(v => {
+    const deltaStr = (parseFloat(a.delta) > 0 ? "+" : "") + a.delta + "%";
+    [a.rpm, a.map, a.oldVal, a.newVal, deltaStr].forEach((v, idx) => {
       const td = document.createElement("td");
       td.textContent = v;
-      if (v.includes("%")) {
+      if (idx === 4) {
         td.style.color = parseFloat(a.delta) > 0 ? "#c0392b" : "#2980b9";
         td.style.fontWeight = "bold";
       }
