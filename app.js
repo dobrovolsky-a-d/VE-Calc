@@ -2,6 +2,7 @@ import { parseLog }        from "./parseLog.js";
 import { parseVEFromText }  from "./parseVEfromText.js";
 import { calculateVE }      from "./veMath.js";
 import { exportRomRaider }  from "./exportRomRaider.js";
+import { show3D }           from "./ve3d.js";
 
 let logData    = null;
 let veOld      = null;
@@ -106,6 +107,17 @@ document.getElementById("calculate").onclick = () => {
 document.getElementById("exportBtn").onclick = () => {
   if (!lastResult) { setDebug("Calculate first"); return; }
   exportRomRaider(lastResult.VE_new);
+};
+
+/* ---------- 3D ---------- */
+document.getElementById("show3DBtn").onclick = () => {
+  if (!lastResult) { setDebug("Calculate first"); return; }
+
+  const container = document.getElementById("ve3dContainer");
+  container.style.display = "block";
+
+  show3D(container, lastResult.VE_new, veOld.rpmAxis, veOld.loadAxis, lastResult.mask);
+  setDebug("3D surface rendered. ЛКМ — вращать, колёсико — зум, ПКМ — сдвиг");
 };
 
 /* ---------- COPY ---------- */
