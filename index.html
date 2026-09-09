@@ -31,22 +31,45 @@
 </div>
 
 <div class="card">
-  <label>Interpolation</label>
-  <select id="mode">
-    <option value="off">Off</option>
-    <option value="soft">Soft</option>
-    <option value="hard">Hard</option>
-    <option value="engine">Engine (recommended)</option>
-  </select>
+  <div style="display:flex; gap:20px; align-items:center; flex-wrap:wrap;">
 
-  <label style="margin-left: 20px;">Min Samples</label>
-  <input type="number" id="minSamples" value="3" min="1" max="50"
-    style="width:60px; margin-left:8px; padding:5px; border-radius:6px; border:1px solid #ccc;">
+    <div>
+      <label>Interpolation</label>
+      <select id="mode">
+        <option value="off">Off</option>
+        <option value="soft">Soft</option>
+        <option value="hard">Hard</option>
+        <option value="engine">Engine</option>
+        <option value="smart" selected>Smart (Physics) ⭐</option>
+      </select>
+    </div>
+
+    <div>
+      <label>Min Samples</label>
+      <input type="number" id="minSamples" value="3" min="1" max="50"
+        style="width:60px; margin-left:8px; padding:5px; border-radius:6px; border:1px solid #ccc;">
+    </div>
+
+    <div>
+      <label>
+        <input type="checkbox" id="showHeatmap" checked>
+        Coverage heatmap on VE
+      </label>
+    </div>
+
+    <div>
+      <label>Anomaly threshold %</label>
+      <input type="number" id="anomalyThreshold" value="15" min="5" max="50"
+        style="width:60px; margin-left:8px; padding:5px; border-radius:6px; border:1px solid #ccc;">
+    </div>
+
+  </div>
 </div>
 
 <div class="card" style="display:flex; gap:10px;">
   <button id="calculate">Calculate VE</button>
   <button id="exportBtn" style="background:#28a745;">Export VE (RomRaider)</button>
+  <button id="copyBtn" style="background:#6c757d;">Copy VE Table</button>
 </div>
 
 <div id="output"></div>

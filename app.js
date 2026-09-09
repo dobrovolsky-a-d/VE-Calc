@@ -3,32 +3,23 @@ import { parseVEFromText }  from "./parseVEfromText.js";
 import { calculateVE }      from "./veMath.js";
 import { exportRomRaider }  from "./exportRomRaider.js";
 
-let logData = null;
-let veOld   = null;
+let logData    = null;
+let veOld      = null;
 let lastResult = null;
 
 const out = document.getElementById("output");
 
 /* ---------- DEBUG ---------- */
 const debug = document.createElement("div");
-debug.style.marginBottom = "15px";
-debug.style.padding      = "10px";
-debug.style.background   = "#fff3cd";
-debug.style.border       = "1px solid #ffeeba";
-debug.style.borderRadius = "6px";
+debug.style.cssText = "margin-bottom:15px;padding:10px;background:#fff3cd;border:1px solid #ffeeba;border-radius:6px;white-space:pre-wrap;";
 document.body.insertBefore(debug, out);
 
-function setDebug(t) {
-  debug.innerText = t;
-}
+function setDebug(t) { debug.innerText = t; }
 
 /* ---------- LOAD LOGS ---------- */
 document.getElementById("loadLog").onchange = async (e) => {
-
   try {
-
     setDebug("Loading logs...");
-
     const files  = Array.from(e.target.files);
     let merged   = [];
     let info     = [];
@@ -40,12 +31,7 @@ document.getElementById("loadLog").onchange = async (e) => {
     }
 
     logData = merged;
-
-    setDebug(
-`Logs loaded:
-${info.join("\n")}
-Total rows: ${logData.length}`
-    );
+    setDebug(`Logs loaded:\n${info.join("\n")}\nTotal rows: ${logData.length}`);
 
   } catch (err) {
     console.error(err);
@@ -55,17 +41,13 @@ Total rows: ${logData.length}`
 
 /* ---------- LOAD VE ---------- */
 document.getElementById("loadManualVE").onclick = () => {
-
   try {
-
     veOld = parseVEFromText(
       document.getElementById("rpmAxis").value,
       document.getElementById("mapAxis").value,
       document.getElementById("veTable").value
     );
-
     setDebug(`VE loaded: ${veOld.rows} x ${veOld.cols}`);
-
   } catch (e) {
     setDebug("VE ERROR:\n" + e.message);
   }
@@ -73,48 +55,46 @@ document.getElementById("loadManualVE").onclick = () => {
 
 /* ---------- COVERAGE ---------- */
 document.getElementById("showCoverage").onclick = () => {
+  if (!logData) { setDebug("Load logs first"); return; }
 
-  if (!logData) {
-    setDebug("Load logs first");
-    return;
-  }
-
-  // FIX: p.map уже PSI — убрано умножение на 14.5
   const rpmAxis  = autoAxis(logData.map(p => p.rpm), 18);
   const loadAxis = autoAxis(logData.map(p => p.map), 18);
-
   const coverage = buildCoverage(logData, rpmAxis, loadAxis);
 
   out.innerHTML = "";
   out.appendChild(makeCoverage(coverage, rpmAxis, loadAxis));
-
   setDebug("Coverage built");
 };
 
 /* ---------- CALCULATE ---------- */
 document.getElementById("calculate").onclick = () => {
-
   try {
-
-    if (!logData || !veOld) {
-      setDebug("Load log and VE first");
-      return;
-    }
+    if (!logData || !veOld) { setDebug("Load log and VE first"); return; }
 
     const mode       = document.getElementById("mode").value;
     const minSamples = parseInt(document.getElementById("minSamples").value) || 3;
+    const anomalyPct = parseFloat(document.getElementById("anomalyThreshold").value) || 15;
+    const showHeat   = document.getElementById("showHeatmap").checked;
 
-    const res = calculateVE(logData, veOld, mode, minSamples);
+    const res  = calculateVE(logData, veOld, mode, minSamples);
     lastResult = res;
+
+    // Аномалии
+    const anomalies = findAnomalies(res.VE_old, res.VE_new, res.mask, anomalyPct, veOld.rpmAxis, veOld.loadAxis);
 
     out.innerHTML = "";
 
-    out.appendChild(makeTable("VE OLD",  res.VE_old));
-    out.appendChild(makeTable("VE NEW",  res.VE_new, res.VE_old));
-    out.appendChild(makeCorrTable("CORR %", res.Correction)); // FIX: отдельный рендер для null-ячеек
+    out.appendChild(makeVETable("VE NEW", res.VE_new, res.VE_old, res.coverage, res.mask, showHeat));
+    out.appendChild(makeCorrTable("CORR %", res.Correction));
     out.appendChild(makeCoverage(res.coverage, veOld.rpmAxis, veOld.loadAxis));
 
-    setDebug("Done");
+    if (anomalies.length > 0) {
+      out.appendChild(makeAnomalyReport(anomalies, anomalyPct));
+    }
+
+    let msg = `Done. Mode: ${mode}\nAnchors (cells with data): ${countMask(res.mask)}/${veOld.rows * veOld.cols}`;
+    if (anomalies.length > 0) msg += `\n⚠️ Anomalies found: ${anomalies.length} cells`;
+    setDebug(msg);
 
   } catch (e) {
     console.error(e);
@@ -124,11 +104,21 @@ document.getElementById("calculate").onclick = () => {
 
 /* ---------- EXPORT ---------- */
 document.getElementById("exportBtn").onclick = () => {
-  if (!lastResult) {
-    setDebug("Calculate first");
-    return;
-  }
+  if (!lastResult) { setDebug("Calculate first"); return; }
   exportRomRaider(lastResult.VE_new);
+};
+
+/* ---------- COPY ---------- */
+document.getElementById("copyBtn").onclick = () => {
+  if (!lastResult) { setDebug("Calculate first"); return; }
+
+  const text = lastResult.VE_new
+    .map(row => row.map(v => v.toFixed(2)).join("\t"))
+    .join("\n");
+
+  navigator.clipboard.writeText(text).then(() => {
+    setDebug("VE table copied to clipboard — paste into RomRaider/EcuFlash");
+  });
 };
 
 /* ---------- HELPERS ---------- */
@@ -141,18 +131,14 @@ function autoAxis(values, bins) {
 }
 
 function buildCoverage(log, rpmAxis, loadAxis) {
-
   const cov = Array.from({ length: rpmAxis.length }, () =>
     Array(loadAxis.length).fill(0)
   );
-
   for (let p of log) {
-    // FIX: p.map уже PSI — не конвертируем
     const r = findClosest(rpmAxis,  p.rpm);
     const c = findClosest(loadAxis, p.map);
     cov[r][c]++;
   }
-
   return cov;
 }
 
@@ -166,12 +152,40 @@ function findClosest(axis, val) {
   return best;
 }
 
+function countMask(mask) {
+  return mask.flat().filter(Boolean).length;
+}
+
+function findAnomalies(oldVE, newVE, mask, threshold, rpmAxis, loadAxis) {
+  const result = [];
+  for (let i = 0; i < oldVE.length; i++) {
+    for (let j = 0; j < oldVE[0].length; j++) {
+      if (!mask[i][j]) continue;
+      const delta = ((newVE[i][j] - oldVE[i][j]) / oldVE[i][j]) * 100;
+      if (Math.abs(delta) > threshold) {
+        result.push({
+          i, j,
+          rpm: rpmAxis ? Math.round(rpmAxis[i]) : i,
+          map: loadAxis ? loadAxis[j].toFixed(1) : j,
+          oldVal: oldVE[i][j].toFixed(1),
+          newVal: newVE[i][j].toFixed(1),
+          delta: delta.toFixed(1)
+        });
+      }
+    }
+  }
+  return result;
+}
+
 /* ---------- RENDER ---------- */
 
-function makeTable(title, data, base=null) {
+// VE таблица с heatmap покрытия и подсветкой якорей
+function makeVETable(title, data, base, coverage, mask, showHeat) {
+
+  const maxCov = Math.max(...coverage.flat().filter(v => v > 0), 1);
 
   const div = document.createElement("div");
-  div.innerHTML = `<h3>${title}</h3>`;
+  div.innerHTML = `<h3>${title} <span style="font-size:12px;color:#888;">(жёлтый = якорь с данными | серый = достроено моделью)</span></h3>`;
 
   const t = document.createElement("table");
 
@@ -180,10 +194,28 @@ function makeTable(title, data, base=null) {
 
     r.forEach((v, j) => {
       const td = document.createElement("td");
+      const cov = coverage[i][j];
+
       td.textContent = isNaN(v) ? "-" : v.toFixed(1);
 
-      if (base && Math.abs(v - base[i][j]) > 0.1) {
-        td.classList.add("changed");
+      if (mask[i][j]) {
+        // Якорная ячейка — подсвечиваем по покрытию
+        if (showHeat) {
+          const intensity = Math.min(cov / maxCov, 1);
+          const r = Math.round(255 * (1 - intensity * 0.3));
+          const g = Math.round(200 * intensity + 80 * (1 - intensity));
+          const b = 50;
+          td.style.background = `rgb(${r},${g},${b})`;
+          td.style.color = intensity > 0.5 ? "white" : "#333";
+        } else {
+          td.classList.add("changed");
+        }
+        td.title = `Coverage: ${cov} points`;
+      } else {
+        // Достроено моделью — серый
+        td.style.background = "#e8e8e8";
+        td.style.color = "#888";
+        td.title = "Model-filled (no data)";
       }
 
       tr.appendChild(td);
@@ -193,10 +225,23 @@ function makeTable(title, data, base=null) {
   });
 
   div.appendChild(t);
+
+  // Легенда
+  if (showHeat) {
+    const legend = document.createElement("div");
+    legend.style.cssText = "margin:5px 0 10px;font-size:11px;display:flex;gap:10px;align-items:center;";
+    legend.innerHTML = `
+      <span style="background:#e8e8e8;color:#888;padding:2px 6px;border-radius:3px;">серый = модель</span>
+      <span style="background:#c8a000;color:white;padding:2px 6px;border-radius:3px;">мало данных</span>
+      <span style="background:#2d8a00;color:white;padding:2px 6px;border-radius:3px;">много данных</span>
+    `;
+    div.appendChild(legend);
+  }
+
   return div;
 }
 
-// FIX: корректный рендер таблицы коррекции — null-ячейки показываем как "-"
+// Таблица коррекции с null-ячейками
 function makeCorrTable(title, data) {
 
   const div = document.createElement("div");
@@ -215,8 +260,9 @@ function makeCorrTable(title, data) {
         td.style.color = "#aaa";
       } else {
         td.textContent = v.toFixed(1);
-        if (v > 0)  td.style.background = `rgba(255,100,100,${Math.min(Math.abs(v)/20, 0.6)})`;
-        if (v < 0)  td.style.background = `rgba(100,180,255,${Math.min(Math.abs(v)/20, 0.6)})`;
+        const alpha = Math.min(Math.abs(v) / 20, 0.7);
+        if (v > 0) td.style.background = `rgba(255,80,80,${alpha})`;
+        if (v < 0) td.style.background = `rgba(80,150,255,${alpha})`;
       }
 
       tr.appendChild(td);
@@ -239,23 +285,19 @@ function makeCoverage(data, rpmAxis, loadAxis) {
   data.forEach((r, i) => {
     const tr = document.createElement("tr");
 
-    // label RPM
     if (rpmAxis) {
       const th = document.createElement("td");
       th.textContent = Math.round(rpmAxis[i]);
-      th.style.fontWeight = "bold";
-      th.style.background = "#f0f0f0";
+      th.style.cssText = "font-weight:bold;background:#f0f0f0;";
       tr.appendChild(th);
     }
 
     r.forEach(v => {
       const td = document.createElement("td");
       td.textContent = v;
-
       if      (v > 50) td.className = "cover-high";
       else if (v > 10) td.className = "cover-mid";
       else if (v > 0)  td.className = "cover-low";
-
       tr.appendChild(td);
     });
 
@@ -263,5 +305,42 @@ function makeCoverage(data, rpmAxis, loadAxis) {
   });
 
   div.appendChild(t);
+  return div;
+}
+
+function makeAnomalyReport(anomalies, threshold) {
+
+  const div = document.createElement("div");
+  div.style.cssText = "background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px;margin-bottom:15px;";
+  div.innerHTML = `<h3 style="margin:0 0 8px;color:#856404;">⚠️ Anomalies > ${threshold}% (${anomalies.length} cells)</h3>`;
+
+  const t = document.createElement("table");
+  t.style.width = "100%";
+
+  const header = document.createElement("tr");
+  ["RPM", "MAP (psi)", "Old VE", "New VE", "Delta %"].forEach(h => {
+    const th = document.createElement("td");
+    th.textContent = h;
+    th.style.fontWeight = "bold";
+    header.appendChild(th);
+  });
+  t.appendChild(header);
+
+  anomalies.forEach(a => {
+    const tr = document.createElement("tr");
+    [a.rpm, a.map, a.oldVal, a.newVal, (a.delta > 0 ? "+" : "") + a.delta + "%"].forEach(v => {
+      const td = document.createElement("td");
+      td.textContent = v;
+      if (v.includes("%")) {
+        td.style.color = parseFloat(a.delta) > 0 ? "#c0392b" : "#2980b9";
+        td.style.fontWeight = "bold";
+      }
+      tr.appendChild(td);
+    });
+    t.appendChild(tr);
+  });
+
+  div.appendChild(t);
+  div.innerHTML += `<p style="margin:8px 0 0;font-size:12px;color:#856404;">Проверь эти ячейки вручную — возможно мусор в логе или реальная большая коррекция.</p>`;
   return div;
 }

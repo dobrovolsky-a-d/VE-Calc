@@ -1,3 +1,5 @@
+import { smartFill } from "./veSmartFill.js";
+
 export function calculateVE(log, veOld, mode="off", MIN_SAMPLES=3) {
 
   const { rpmAxis, loadAxis } = veOld;
@@ -9,7 +11,7 @@ export function calculateVE(log, veOld, mode="off", MIN_SAMPLES=3) {
   const coverage = makeMatrix(rows, cols, 0);
   const mask     = makeMatrix(rows, cols, false);
 
-  // --- BILINEAR ---
+  // --- BILINEAR ACCUMULATION ---
   for (let p of log) {
 
     const r = findBounds(rpmAxis, p.rpm);
@@ -28,14 +30,14 @@ export function calculateVE(log, veOld, mode="off", MIN_SAMPLES=3) {
     apply(r.i1, c.i1, w11);
 
     function apply(i, j, w) {
-      sum[i][j]      += factor * w;
-      weight[i][j]   += w;
-      coverage[i][j] ++;
+      sum[i][j]    += factor * w;
+      weight[i][j] += w;
+      coverage[i][j]++;
     }
   }
 
-  let out  = makeMatrix(rows, cols, 0);
-  const corr = makeMatrix(rows, cols, null); // FIX: null для ячеек без данных
+  let out        = makeMatrix(rows, cols, 0);
+  const corr     = makeMatrix(rows, cols, null);
 
   // --- BASE CALC + FILTER ---
   for (let i = 0; i < rows; i++) {
@@ -58,15 +60,17 @@ export function calculateVE(log, veOld, mode="off", MIN_SAMPLES=3) {
   if (mode === "soft")   out = interpolateSoft(out, mask);
   if (mode === "hard")   out = smoothNTimes(out, 8);
   if (mode === "engine") out = engineInterpolation(out, mask);
+  if (mode === "smart")  out = smartFill(out, mask, veOld.values, rpmAxis, loadAxis);
 
-  // FIX: сглаживание только если выбран режим (не при mode="off")
-  if (mode !== "off") out = smooth(out);
+  // Лёгкий smooth только если не smart (smart уже делает свой blend)
+  if (mode !== "off" && mode !== "smart") out = smooth(out);
 
   return {
     VE_old:     veOld.values,
     VE_new:     out,
     Correction: corr,
-    coverage
+    coverage,
+    mask
   };
 }
 
@@ -93,10 +97,7 @@ function engineInterpolation(m, mask) {
       const avg = neighbors.reduce((a,b) => a+b, 0) / neighbors.length;
 
       let loadBias = 0;
-      if (
-        j > 0 && j < m[0].length-1 &&
-        mask[i][j-1] && mask[i][j+1]
-      ) {
+      if (j > 0 && j < m[0].length-1 && mask[i][j-1] && mask[i][j+1]) {
         loadBias = (m[i][j+1] - m[i][j-1]) * 0.3;
       }
 
@@ -136,10 +137,10 @@ function interpolateSoft(m, mask) {
 
 /* ================= SMOOTH ================= */
 
-// FIX: обрабатываем края матрицы (граничные ячейки копируются с соседей)
+// Обрабатываем все ячейки включая края
 function smooth(m) {
 
-  const out = clone(m);
+  const out  = clone(m);
   const rows = m.length;
   const cols = m[0].length;
 
@@ -168,15 +169,13 @@ function smoothNTimes(m, n) {
 
 /* ================= HELPERS ================= */
 
-// FIX: корректная обработка значений за пределами оси (клампинг на начало/конец)
+// Корректный клампинг за пределами оси
 function findBounds(axis, val) {
 
-  // ниже минимума — клампим на первый интервал
   if (val <= axis[0]) {
     return { i0: 0, i1: 1, frac: 0 };
   }
 
-  // выше максимума — клампим на последний интервал
   if (val >= axis[axis.length-1]) {
     return { i0: axis.length-2, i1: axis.length-1, frac: 1 };
   }
@@ -188,7 +187,6 @@ function findBounds(axis, val) {
     }
   }
 
-  // fallback (не должно сюда попасть)
   return { i0: axis.length-2, i1: axis.length-1, frac: 1 };
 }
 
