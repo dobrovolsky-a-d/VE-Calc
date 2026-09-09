@@ -116,7 +116,9 @@ document.getElementById("show3DBtn").onclick = () => {
   const container = document.getElementById("ve3dContainer");
   container.style.display = "block";
 
-  show3D(container, lastResult.VE_new, veOld.rpmAxis, veOld.loadAxis, lastResult.mask);
+  show3D(container, lastResult.VE_new, veOld.rpmAxis, veOld.loadAxis, lastResult.mask, (updated) => {
+    lastResult.VE_new = updated;
+  });
   setDebug("3D surface rendered. ЛКМ — вращать, колёсико — зум, ПКМ — сдвиг");
 };
 
