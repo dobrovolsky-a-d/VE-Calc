@@ -4,22 +4,28 @@
  * - Клик — выбрать точку, Ctrl+клик — добавить к выделению
  * - +/- или стрелки вверх/вниз — менять значение выделенных
  * - Настраиваемый шаг 0.5–10
- * - Поверхность перестраивается онлайн
  */
 
 export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpdate) {
 
+  const TOOLBAR_H = 50;
+  const H = 550;
+
   container.innerHTML = "";
   container.style.cssText = "width:100%;position:relative;background:#111;border-radius:10px;overflow:hidden;";
-  container.style.height = "560px";
+  container.style.height = (TOOLBAR_H + H) + "px";
 
-  // Рабочая копия
   let veData = veMatrix.map(r => [...r]);
-
-  // Выделенные ячейки: Set of "i_j"
   const selected = new Set();
 
-  // --- Toolbar ---
+  // sceneAPI связывает toolbar-функции (adjustSelected и т.д.) с рендер-сценой,
+  // которая создаётся асинхронно после загрузки Three.js
+  const sceneAPI = { rebuild: null, ready: false };
+
+  function cellKey(i, j) { return `${i}_${j}`; }
+
+  /* ---------------- Toolbar ---------------- */
+
   const toolbar = document.createElement("div");
   toolbar.style.cssText = "position:absolute;top:10px;left:10px;z-index:20;display:flex;gap:8px;align-items:center;flex-wrap:wrap;";
 
@@ -31,7 +37,6 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     return b;
   }
 
-  // Шаг
   const stepLabel = document.createElement("span");
   stepLabel.style.cssText = "color:#aaa;font-size:12px;font-family:system-ui;";
   stepLabel.textContent = "Шаг:";
@@ -49,7 +54,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
   const clearBtn = btn("Снять выделение", "#555", () => {
     selected.clear();
-    updatePoints();
+    if (sceneAPI.rebuild) sceneAPI.rebuild();
     updateInfoBar();
   });
 
@@ -62,6 +67,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   });
 
   const closeBtn = btn("✕ Закрыть", "rgba(255,255,255,0.1)", () => {
+    window.removeEventListener("keydown", keyHandler);
     container.style.display = "none";
   });
   closeBtn.style.border = "1px solid rgba(255,255,255,0.25)";
@@ -69,10 +75,10 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   [stepLabel, stepInput, plusBtn, minusBtn, clearBtn, copyBtn, closeBtn].forEach(el => toolbar.appendChild(el));
   container.appendChild(toolbar);
 
-  // --- Info bar (выделено + значение) ---
+  /* ---------------- Info bar ---------------- */
+
   const infoBar = document.createElement("div");
   infoBar.style.cssText = "position:absolute;bottom:10px;left:10px;z-index:20;color:#aaa;font-size:11px;font-family:system-ui;background:rgba(0,0,0,0.5);padding:4px 10px;border-radius:5px;";
-  infoBar.textContent = "Клик по точке — выбрать | Ctrl+клик — добавить | +/- или ↑↓ — изменить";
   container.appendChild(infoBar);
 
   function updateInfoBar() {
@@ -88,14 +94,43 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     const max = Math.max(...vals).toFixed(1);
     infoBar.textContent = `Выделено: ${selected.size} ячеек | VE: ${min === max ? min : min + " – " + max}`;
   }
+  updateInfoBar();
 
-  // Hint
   const hint = document.createElement("div");
   hint.style.cssText = "position:absolute;bottom:10px;right:15px;color:#555;font-size:10px;font-family:system-ui;z-index:10;";
   hint.textContent = "ЛКМ — вращать  |  Колёсико — зум  |  ПКМ — сдвиг";
   container.appendChild(hint);
 
-  // Загружаем Three.js
+  /* ---------------- Изменение значений ---------------- */
+
+  let isAdjusting = false;
+  function adjustSelected(delta) {
+    if (selected.size === 0 || isAdjusting || !sceneAPI.rebuild) return;
+    isAdjusting = true;
+
+    selected.forEach(k => {
+      const [i, j] = k.split("_").map(Number);
+      veData[i][j] = Math.max(40, Math.min(130, veData[i][j] + delta));
+    });
+
+    sceneAPI.rebuild();
+    updateInfoBar();
+    if (onTableUpdate) onTableUpdate(veData);
+
+    isAdjusting = false;
+  }
+
+  const keyHandler = (e) => {
+    if (e.target.tagName === "INPUT") return;
+    const step = parseFloat(stepInput.value) || 1;
+    if (e.key === "+" || e.key === "=" || e.key === "ArrowUp")   { e.preventDefault(); adjustSelected(+step); }
+    if (e.key === "-" || e.key === "_" || e.key === "ArrowDown") { e.preventDefault(); adjustSelected(-step); }
+    if (e.key === "Escape") { selected.clear(); if (sceneAPI.rebuild) sceneAPI.rebuild(); updateInfoBar(); }
+  };
+  window.addEventListener("keydown", keyHandler);
+
+  /* ---------------- Three.js сцена ---------------- */
+
   if (window.THREE) {
     initScene();
   } else {
@@ -105,62 +140,28 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     document.head.appendChild(script);
   }
 
-  // --- Изменить выделенные ---
-  function adjustSelected(delta) {
-    if (selected.size === 0) return;
-    selected.forEach(k => {
-      const [i, j] = k.split("_").map(Number);
-      veData[i][j] = Math.max(40, Math.min(130, veData[i][j] + delta));
-    });
-    rebuildSurface();
-    updateInfoBar();
-    if (onTableUpdate) onTableUpdate(veData);
-  }
-
-  // Keyboard
-  const keyHandler = (e) => {
-    if (e.target.tagName === "INPUT") return;
-    const step = parseFloat(stepInput.value) || 1;
-    if (e.key === "+" || e.key === "=" || e.key === "ArrowUp")   { e.preventDefault(); adjustSelected(+step); }
-    if (e.key === "-" || e.key === "_" || e.key === "ArrowDown") { e.preventDefault(); adjustSelected(-step); }
-    if (e.key === "Escape") { selected.clear(); updatePoints(); updateInfoBar(); }
-  };
-  window.addEventListener("keydown", keyHandler);
-
-  // Cleanup при закрытии
-  closeBtn.onclick = () => {
-    window.removeEventListener("keydown", keyHandler);
-    container.style.display = "none";
-  };
-
-  // --- Three.js сцена ---
   function initScene() {
     const THREE = window.THREE;
     const rows  = veData.length;
     const cols  = veData[0].length;
-
-    const W = container.clientWidth;
-    const H = 520;
+    const W     = container.clientWidth;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.domElement.style.cssText = "position:absolute;top:40px;left:0;";
+    renderer.domElement.style.cssText = `position:absolute;top:${TOOLBAR_H}px;left:0;`;
     container.appendChild(renderer.domElement);
 
-    const scene  = new THREE.Scene();
+    const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111111);
 
     const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 1000);
-    camera.position.set(30, 25, 40);
-    camera.lookAt(0, 0, 0);
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.5));
     const dir = new THREE.DirectionalLight(0xffffff, 0.6);
     dir.position.set(20, 40, 20);
     scene.add(dir);
 
-    // Масштаб
     const scaleX  = 30 / (cols - 1);
     const scaleZ  = 30 / (rows - 1);
     const offsetX = -15;
@@ -170,6 +171,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       const flat = veData.flat();
       return [Math.min(...flat), Math.max(...flat)];
     }
+    function getScaleY(vMin, vMax) { return 15 / ((vMax - vMin) || 1); }
 
     function veColor(ve, vMin, vMax) {
       const t = (ve - vMin) / ((vMax - vMin) || 1);
@@ -181,24 +183,67 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       return c;
     }
 
-    function getScaleY(vMin, vMax) { return 15 / ((vMax - vMin) || 1); }
-
-    function cellKey(i, j) { return `${i}_${j}`; }
-
-    // --- Поверхность ---
     let surfaceMesh = null;
     let wireMesh    = null;
+    let pointsMesh  = null;
+    const vertexPositions = [];
 
-    // --- Точки (вершины) ---
-    let pointsMesh = null;
+    // --- Colorbar (создаём DOM один раз, дальше только текст) ---
+    const colorbar = createColorbarDOM(container);
 
-    // Для raycasting
-    const vertexPositions = []; // [{i,j,x,y,z}]
+    // --- Overlay для подписей осей (создаём один раз) ---
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `position:absolute;top:${TOOLBAR_H}px;left:0;width:100%;height:${H}px;pointer-events:none;overflow:hidden;`;
+    container.appendChild(overlay);
+
+    let labelDefs = [];
+    let labelEls  = [];
+
+    function rebuildLabels(vMin, vMax) {
+      // Удаляем старые
+      labelEls.forEach(el => el.remove());
+      labelDefs = [];
+      labelEls  = [];
+
+      const rpmStep = Math.max(1, Math.floor(rows / 6));
+      for (let i = 0; i < rows; i += rpmStep) {
+        labelDefs.push({ pos: new THREE.Vector3(offsetX - 2, 0, i * scaleZ + offsetZ), text: Math.round(rpmAxis[i]) + "", color: "#66ff88" });
+      }
+      const mapStep = Math.max(1, Math.floor(cols / 6));
+      for (let j = 0; j < cols; j += mapStep) {
+        labelDefs.push({ pos: new THREE.Vector3(j * scaleX + offsetX, 0, 17), text: loadAxis[j].toFixed(1), color: "#ffaa55" });
+      }
+      for (let k = 0; k <= 5; k++) {
+        const ve = vMin + (vMax - vMin) * k / 5;
+        labelDefs.push({ pos: new THREE.Vector3(offsetX - 2, (ve - vMin) * getScaleY(vMin, vMax), offsetZ - 1), text: ve.toFixed(0) + "%", color: "#aaaaff" });
+      }
+      labelDefs.push({ pos: new THREE.Vector3(offsetX - 5, 2, 0),  text: "RPM",     color: "#44ff88", bold: true });
+      labelDefs.push({ pos: new THREE.Vector3(0, -1, 19),           text: "MAP psi", color: "#ff8844", bold: true });
+      labelDefs.push({ pos: new THREE.Vector3(offsetX - 5, 10, offsetZ), text: "VE %", color: "#aaaaff", bold: true });
+
+      labelEls = labelDefs.map(lp => {
+        const el = document.createElement("div");
+        el.textContent = lp.text;
+        el.style.cssText = `position:absolute;color:${lp.color};font-size:${lp.bold ? "12px" : "10px"};font-weight:${lp.bold ? "bold" : "normal"};font-family:system-ui,monospace;white-space:nowrap;text-shadow:0 0 4px #000,0 0 2px #000;transform:translate(-50%,-50%);`;
+        overlay.appendChild(el);
+        return el;
+      });
+    }
+
+    function updateLabelPositions() {
+      const W2 = container.clientWidth;
+      labelDefs.forEach((lp, idx) => {
+        const v = lp.pos.clone().project(camera);
+        labelEls[idx].style.display = v.z > 1 ? "none" : "block";
+        labelEls[idx].style.left = ((v.x * 0.5 + 0.5) * W2) + "px";
+        labelEls[idx].style.top  = ((-v.y * 0.5 + 0.5) * H) + "px";
+      });
+    }
 
     function rebuildSurface() {
-      if (surfaceMesh) { scene.remove(surfaceMesh); surfaceMesh.geometry.dispose(); }
-      if (wireMesh)    { scene.remove(wireMesh);    wireMesh.geometry.dispose(); }
-      if (pointsMesh)  { scene.remove(pointsMesh);  pointsMesh.geometry.dispose(); }
+      if (surfaceMesh) { scene.remove(surfaceMesh); surfaceMesh.geometry.dispose(); surfaceMesh.material.dispose(); }
+      if (wireMesh)    { scene.remove(wireMesh);    wireMesh.geometry.dispose();    wireMesh.material.dispose(); }
+      if (pointsMesh)  { scene.remove(pointsMesh);  pointsMesh.geometry.dispose();  pointsMesh.material.dispose(); }
 
       vertexPositions.length = 0;
 
@@ -224,9 +269,8 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
           const dim = (mask && !mask[i][j]) ? 0.65 : 1.0;
           colors.push(c.r * dim, c.g * dim, c.b * dim);
 
-          // Точки — белые, выделенные — голубые
           if (selected.has(cellKey(i, j))) {
-            ptPos.push(x, y + 0.1, z);
+            ptPos.push(x, y + 0.12, z);
             ptColors.push(0.2, 0.9, 1.0);
           } else {
             ptPos.push(x, y + 0.05, z);
@@ -245,7 +289,6 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
         }
       }
 
-      // Поверхность
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
       geo.setAttribute("color",    new THREE.Float32BufferAttribute(colors, 3));
@@ -257,79 +300,34 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       }));
       scene.add(surfaceMesh);
 
-      // Белая сетка
       wireMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
         wireframe: true, color: 0xffffff, opacity: 0.2, transparent: true
       }));
       scene.add(wireMesh);
 
-      // Точки на пересечениях
       const ptGeo = new THREE.BufferGeometry();
       ptGeo.setAttribute("position", new THREE.Float32BufferAttribute(ptPos, 3));
       ptGeo.setAttribute("color",    new THREE.Float32BufferAttribute(ptColors, 3));
-
       pointsMesh = new THREE.Points(ptGeo, new THREE.PointsMaterial({
         size: 0.35, vertexColors: true, sizeAttenuation: true
       }));
       scene.add(pointsMesh);
 
-      // Colorbar обновляем
-      addColorbar(container, vMin, vMax);
+      updateColorbarLabels(colorbar, vMin, vMax);
+      rebuildLabels(vMin, vMax);
     }
 
-    function updatePoints() { rebuildSurface(); }
+    // Регистрируем rebuild в sceneAPI — теперь кнопки тулбара могут его вызывать
+    sceneAPI.rebuild = rebuildSurface;
+    sceneAPI.ready   = true;
 
     rebuildSurface();
 
-    // Сетка дна
     const grid = new THREE.GridHelper(30, 10, 0x333333, 0x222222);
     scene.add(grid);
 
-    // --- HTML подписи осей ---
-    const overlay = document.createElement("div");
-    overlay.style.cssText = "position:absolute;top:40px;left:0;width:100%;height:" + H + "px;pointer-events:none;overflow:hidden;";
-    container.appendChild(overlay);
+    /* ---------------- Camera orbit ---------------- */
 
-    const labelDefs = [];
-
-    const rpmStep = Math.max(1, Math.floor(rows / 6));
-    for (let i = 0; i < rows; i += rpmStep) {
-      labelDefs.push({ pos: new THREE.Vector3(offsetX - 2, 0, i * scaleZ + offsetZ), text: Math.round(rpmAxis[i]) + "", color: "#66ff88" });
-    }
-    const mapStep = Math.max(1, Math.floor(cols / 6));
-    for (let j = 0; j < cols; j += mapStep) {
-      labelDefs.push({ pos: new THREE.Vector3(j * scaleX + offsetX, 0, 17), text: loadAxis[j].toFixed(1), color: "#ffaa55" });
-    }
-
-    const [vMin0, vMax0] = getVeMinMax();
-    for (let k = 0; k <= 5; k++) {
-      const ve = vMin0 + (vMax0 - vMin0) * k / 5;
-      labelDefs.push({ pos: new THREE.Vector3(offsetX - 2, (ve - vMin0) * getScaleY(vMin0, vMax0), offsetZ - 1), text: ve.toFixed(0) + "%", color: "#aaaaff" });
-    }
-
-    labelDefs.push({ pos: new THREE.Vector3(offsetX - 5, 2, 0),    text: "RPM",     color: "#44ff88", bold: true });
-    labelDefs.push({ pos: new THREE.Vector3(0, -1, 19),             text: "MAP psi", color: "#ff8844", bold: true });
-    labelDefs.push({ pos: new THREE.Vector3(offsetX - 5, 10, offsetZ), text: "VE %", color: "#aaaaff", bold: true });
-
-    const labelEls = labelDefs.map(lp => {
-      const el = document.createElement("div");
-      el.textContent = lp.text;
-      el.style.cssText = `position:absolute;color:${lp.color};font-size:${lp.bold ? "12px" : "10px"};font-weight:${lp.bold ? "bold" : "normal"};font-family:system-ui,monospace;white-space:nowrap;text-shadow:0 0 4px #000,0 0 2px #000;transform:translate(-50%,-50%);`;
-      overlay.appendChild(el);
-      return el;
-    });
-
-    function updateLabels() {
-      const W2 = container.clientWidth;
-      labelDefs.forEach((lp, idx) => {
-        const v = lp.pos.clone().project(camera);
-        labelEls[idx].style.display = v.z > 1 ? "none" : "block";
-        labelEls[idx].style.left = ((v.x * 0.5 + 0.5) * W2) + "px";
-        labelEls[idx].style.top  = ((-v.y * 0.5 + 0.5) * H) + "px";
-      });
-    }
-
-    // --- Orbit ---
     let isDragging = false, isRight = false;
     let startX = 0, startY = 0, lastX = 0, lastY = 0;
     let theta = 0.6, phi = 0.8, radius = 55;
@@ -366,11 +364,13 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       updateCamera();
     });
     renderer.domElement.addEventListener("wheel", e => {
+      e.preventDefault();
       radius = Math.max(10, Math.min(150, radius + e.deltaY * 0.05));
       updateCamera();
-    });
+    }, { passive: false });
 
-    // --- Raycaster для клика по точкам ---
+    /* ---------------- Click selection ---------------- */
+
     const raycaster = new THREE.Raycaster();
     raycaster.params.Points.threshold = 0.5;
     const mouse = new THREE.Vector2();
@@ -384,18 +384,15 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
       raycaster.setFromCamera(mouse, camera);
 
-      // Сначала ищем по точкам (Points mesh)
       const ptHits = raycaster.intersectObject(pointsMesh);
-
       let bestIdx = -1;
 
       if (ptHits.length > 0) {
         bestIdx = ptHits[0].index;
       } else {
-        // Fallback — ближайшая вершина поверхности
         const hits = raycaster.intersectObject(surfaceMesh);
         if (hits.length === 0) {
-          if (!e.ctrlKey) { selected.clear(); updatePoints(); updateInfoBar(); }
+          if (!e.ctrlKey) { selected.clear(); rebuildSurface(); updateInfoBar(); }
           return;
         }
         const pt = hits[0].point;
@@ -419,11 +416,10 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
         selected.add(key);
       }
 
-      updatePoints();
+      rebuildSurface();
       updateInfoBar();
     });
 
-    // --- Resize ---
     window.addEventListener("resize", () => {
       const W2 = container.clientWidth;
       renderer.setSize(W2, H);
@@ -431,34 +427,44 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       camera.updateProjectionMatrix();
     });
 
-    // --- Render loop ---
     function animate() {
       requestAnimationFrame(animate);
       renderer.render(scene, camera);
-      updateLabels();
+      updateLabelPositions();
     }
     animate();
   }
 }
 
-function addColorbar(container, veMin, veMax) {
-  const old = container.querySelector(".ve-colorbar");
-  if (old) old.remove();
+/* ---------------- Colorbar helpers ---------------- */
 
+function createColorbarDOM(container) {
   const wrap = document.createElement("div");
-  wrap.className = "ve-colorbar";
   wrap.style.cssText = "position:absolute;right:15px;top:60px;z-index:10;";
 
   const bar = document.createElement("div");
   bar.style.cssText = "width:14px;height:180px;background:linear-gradient(to bottom,rgb(255,0,0),rgb(255,255,0),rgb(0,255,0),rgb(0,255,255),rgb(0,0,255));border-radius:3px;border:1px solid #333;";
   wrap.appendChild(bar);
 
-  [[veMax, "-8px"], [((veMin+veMax)/2), "82px"], [veMin, "172px"]].forEach(([v, top]) => {
-    const lbl = document.createElement("div");
-    lbl.style.cssText = `position:absolute;right:20px;top:${top};color:#aaa;font-size:10px;font-family:monospace;white-space:nowrap;`;
-    lbl.textContent = v.toFixed(0) + "%";
-    wrap.appendChild(lbl);
-  });
+  const lblTop = document.createElement("div");
+  lblTop.style.cssText = "position:absolute;right:20px;top:-8px;color:#aaa;font-size:10px;font-family:monospace;white-space:nowrap;";
+  wrap.appendChild(lblTop);
+
+  const lblMid = document.createElement("div");
+  lblMid.style.cssText = "position:absolute;right:20px;top:82px;color:#aaa;font-size:10px;font-family:monospace;white-space:nowrap;";
+  wrap.appendChild(lblMid);
+
+  const lblBot = document.createElement("div");
+  lblBot.style.cssText = "position:absolute;right:20px;top:172px;color:#aaa;font-size:10px;font-family:monospace;white-space:nowrap;";
+  wrap.appendChild(lblBot);
 
   container.appendChild(wrap);
+
+  return { lblTop, lblMid, lblBot };
+}
+
+function updateColorbarLabels(colorbar, veMin, veMax) {
+  colorbar.lblTop.textContent = veMax.toFixed(0) + "%";
+  colorbar.lblMid.textContent = ((veMin + veMax) / 2).toFixed(0) + "%";
+  colorbar.lblBot.textContent = veMin.toFixed(0) + "%";
 }
