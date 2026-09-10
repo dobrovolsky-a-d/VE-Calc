@@ -148,7 +148,8 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     const THREE = window.THREE;
     const rows  = veData.length;
     const cols  = veData[0].length;
-    const W     = container.clientWidth;
+    let   W     = container.clientWidth;
+    if (!W || W < 100) W = container.parentElement ? container.parentElement.clientWidth : 900;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(W, H);
