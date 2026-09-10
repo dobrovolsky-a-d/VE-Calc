@@ -58,6 +58,10 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     updateInfoBar();
   });
 
+  const resetViewBtn = btn("🎥 Сброс вида", "#456", () => {
+    if (sceneAPI.resetView) sceneAPI.resetView();
+  });
+
   const copyBtn = btn("📋 Copy table", "#28a745", () => {
     const text = veData.map(r => r.map(v => v.toFixed(2)).join("\t")).join("\n");
     navigator.clipboard.writeText(text).then(() => {
@@ -72,7 +76,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   });
   closeBtn.style.border = "1px solid rgba(255,255,255,0.25)";
 
-  [stepLabel, stepInput, plusBtn, minusBtn, clearBtn, copyBtn, closeBtn].forEach(el => toolbar.appendChild(el));
+  [stepLabel, stepInput, plusBtn, minusBtn, clearBtn, resetViewBtn, copyBtn, closeBtn].forEach(el => toolbar.appendChild(el));
   container.appendChild(toolbar);
 
   /* ---------------- Info bar ---------------- */
@@ -330,8 +334,8 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
     let isDragging = false, isRight = false;
     let startX = 0, startY = 0, lastX = 0, lastY = 0;
-    let theta = 0.6, phi = 0.8, radius = 55;
-    let panX = 0, panY = 0;
+    let theta = -0.7, phi = 1.0, radius = 48;
+    let panX = 0, panY = 2;
     let didDrag = false;
 
     function updateCamera() {
@@ -343,6 +347,11 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       camera.lookAt(panX, panY, 0);
     }
     updateCamera();
+
+    sceneAPI.resetView = () => {
+      theta = -0.7; phi = 1.0; radius = 48; panX = 0; panY = 2;
+      updateCamera();
+    };
 
     renderer.domElement.addEventListener("contextmenu", e => e.preventDefault());
     renderer.domElement.addEventListener("mousedown", e => {
