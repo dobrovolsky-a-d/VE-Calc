@@ -152,9 +152,11 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     if (!W || W < 100) W = container.parentElement ? container.parentElement.clientWidth : 900;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.domElement.style.position = "absolute";
+    renderer.domElement.style.top      = TOOLBAR_H + "px";
+    renderer.domElement.style.left     = "0";
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.domElement.style.cssText = `position:absolute;top:${TOOLBAR_H}px;left:0;`;
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
