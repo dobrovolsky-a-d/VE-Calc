@@ -128,6 +128,37 @@ document.getElementById("show3DBtn").onclick = () => {
   });
 };
 
+/* ---------- EDIT VE IN 3D (независимо от Calculate) ---------- */
+document.getElementById("editVE3DBtn").onclick = () => {
+  try {
+    // Парсим поля напрямую — не трогаем veOld/lastResult, чтобы не ломать основной workflow
+    const parsed = parseVEFromText(
+      document.getElementById("rpmAxis").value,
+      document.getElementById("mapAxis").value,
+      document.getElementById("veTable").value
+    );
+
+    const container = document.getElementById("ve3dContainer");
+    container.style.display = "block";
+
+    void container.offsetWidth;
+
+    requestAnimationFrame(() => {
+      // mask=null — все ячейки трактуются как реальные данные (нет смысла тускнить,
+      // это же просто редактирование введённой вручную таблицы)
+      show3D(container, parsed.values, parsed.rpmAxis, parsed.loadAxis, null, (updated) => {
+        // Отражаем правки обратно в поле VE Table, чтобы можно было скопировать текстом
+        document.getElementById("veTable").value = updated.map(r => r.map(v => v.toFixed(2)).join("\t")).join("\n");
+      });
+      setDebug(`Edit VE in 3D: ${parsed.rows} x ${parsed.cols}. ЛКМ — вращать, клик — выбрать точку`);
+    });
+
+  } catch (e) {
+    console.error(e);
+    setDebug("EDIT 3D ERROR:\n" + e.message);
+  }
+};
+
 /* ---------- COPY ---------- */
 document.getElementById("copyBtn").onclick = () => {
   if (!lastResult) { setDebug("Calculate first"); return; }
