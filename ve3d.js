@@ -10,7 +10,19 @@
  * Если не передан — поведение идентично старому (VE, 40–130%), ничего не ломает.
  */
 
+// Модульная переменная — гарантирует что на window висит только ОДИН keydown
+// листенер за раз, даже если show3D() вызывается повторно (переоткрытие,
+// разные вкладки/карты) без явного клика по "Закрыть". Без этого каждый повторный
+// вызов копил ещё один листенер, и один "+" срабатывал N раз одновременно.
+let activeKeyHandler = null;
+
 export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpdate, options) {
+
+  // Снимаем листенер предыдущего открытия 3D, если он ещё жив
+  if (activeKeyHandler) {
+    window.removeEventListener("keydown", activeKeyHandler);
+    activeKeyHandler = null;
+  }
 
   const VAL_LABEL = (options && options.label) || "VE %";
   const VAL_MIN   = (options && typeof options.min === "number") ? options.min : 40;
@@ -79,12 +91,16 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   });
 
   const closeBtn = btn("✕ Закрыть", "rgba(255,255,255,0.1)", () => {
-    window.removeEventListener("keydown", keyHandler);
+    if (activeKeyHandler) {
+      window.removeEventListener("keydown", activeKeyHandler);
+      activeKeyHandler = null;
+    }
     container.style.display = "none";
   });
   closeBtn.style.border = "1px solid rgba(255,255,255,0.25)";
 
-  [stepLabel, stepInput, plusBtn, minusBtn, clearBtn, resetViewBtn, copyBtn, closeBtn].forEach(el => toolbar.appendChild(el));
+  const undoBtn = btn("↩ Undo", "#8855cc", () => undo());
+  [stepLabel, stepInput, plusBtn, minusBtn, undoBtn, clearBtn, resetViewBtn, copyBtn, closeBtn].forEach(el => toolbar.appendChild(el));
   container.appendChild(toolbar);
 
   /* ---------------- Info bar (общая строка снизу) ---------------- */
@@ -151,12 +167,30 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   hint.textContent = "ЛКМ — вращать  |  Колёсико — зум  |  ПКМ — сдвиг";
   container.appendChild(hint);
 
-  /* ---------------- Изменение значений ---------------- */
+  /* ---------------- Изменение значений + Undo ---------------- */
+
+  const history = []; // стек снапшотов veData перед каждым изменением
+  const MAX_HISTORY = 50;
+
+  function pushHistory() {
+    history.push(veData.map(r => [...r]));
+    if (history.length > MAX_HISTORY) history.shift();
+  }
+
+  function undo() {
+    if (history.length === 0 || !sceneAPI.rebuild) return;
+    veData = history.pop();
+    sceneAPI.rebuild();
+    updateSelectionUI();
+    if (onTableUpdate) onTableUpdate(veData);
+  }
 
   let isAdjusting = false;
   function adjustSelected(delta) {
     if (selected.size === 0 || isAdjusting || !sceneAPI.rebuild) return;
     isAdjusting = true;
+
+    pushHistory();
 
     selected.forEach(k => {
       const [i, j] = k.split("_").map(Number);
@@ -176,7 +210,10 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     if (e.key === "+" || e.key === "=" || e.key === "ArrowUp")   { e.preventDefault(); adjustSelected(+step); }
     if (e.key === "-" || e.key === "_" || e.key === "ArrowDown") { e.preventDefault(); adjustSelected(-step); }
     if (e.key === "Escape") { selected.clear(); if (sceneAPI.rebuild) sceneAPI.rebuild(); updateSelectionUI(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); }
   };
+
+  activeKeyHandler = keyHandler;
   window.addEventListener("keydown", keyHandler);
 
   /* ---------------- Three.js сцена ---------------- */
