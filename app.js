@@ -13,7 +13,10 @@ const out = document.getElementById("output");
 /* ---------- DEBUG ---------- */
 const debug = document.createElement("div");
 debug.style.cssText = "margin-bottom:15px;padding:10px;background:#fff3cd;border:1px solid #ffeeba;border-radius:6px;white-space:pre-wrap;";
-document.body.insertBefore(debug, out);
+// Вставляем debug-блок перед #output через ЕГО РЕАЛЬНОГО родителя, а не document.body —
+// раньше output был прямым потомком body, теперь он внутри вкладки .tab-panel,
+// и insertBefore(debug, out) относительно body падал с NotFoundError
+out.parentNode.insertBefore(debug, out);
 
 function setDebug(t) { debug.innerText = t; }
 
