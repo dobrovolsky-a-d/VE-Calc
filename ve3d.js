@@ -98,7 +98,6 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     const max = Math.max(...vals).toFixed(1);
     infoBar.textContent = `Выделено: ${selected.size} ячеек | VE: ${min === max ? min : min + " – " + max}`;
   }
-  updateSelectionUI();
 
   /* ---------------- Detail panel (RPM/MAP/VE выбранных точек) ---------------- */
   // Отдельная панель слева, под тулбаром — не перекрывает саму сетку с точками
@@ -130,10 +129,14 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
     detailPanel.innerHTML = header + lines;
   }
+
   function updateSelectionUI() {
     updateInfoBar();
     updateDetailPanel();
   }
+
+  // Теперь когда все функции и DOM-узлы готовы — можно вызвать первичное обновление
+  updateSelectionUI();
 
   const hint = document.createElement("div");
   hint.style.cssText = "position:absolute;bottom:10px;right:15px;color:#555;font-size:10px;font-family:system-ui;z-index:10;";
