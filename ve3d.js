@@ -51,6 +51,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
   function btn(text, bg, cb) {
     const b = document.createElement("button");
+    b.type = "button";
     b.textContent = text;
     b.style.cssText = `background:${bg};color:white;border:none;border-radius:6px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:system-ui;`;
     b.onclick = cb;

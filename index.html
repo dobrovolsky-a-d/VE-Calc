@@ -9,6 +9,23 @@
 
 <h1>Tuning Suite</h1>
 
+<div id="globalError" style="display:none;background:#ffebee;border:2px solid #e53935;border-radius:8px;padding:14px;margin-bottom:15px;color:#b71c1c;font-family:monospace;font-size:13px;white-space:pre-wrap;"></div>
+
+<script>
+  // Показываем любую JS ошибку прямо на странице — чтобы сразу видеть что сломалось,
+  // без необходимости открывать консоль разработчика
+  window.addEventListener("error", (e) => {
+    const box = document.getElementById("globalError");
+    box.style.display = "block";
+    box.textContent = "⚠️ JS ERROR:\n" + e.message + "\n" + (e.filename ? `${e.filename}:${e.lineno}:${e.colno}` : "");
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    const box = document.getElementById("globalError");
+    box.style.display = "block";
+    box.textContent = "⚠️ PROMISE ERROR:\n" + (e.reason && e.reason.message ? e.reason.message : e.reason);
+  });
+</script>
+
 <div class="tabs">
   <button class="tab-btn active" data-tab="tab-ve">VE Calc</button>
   <button class="tab-btn" data-tab="tab-maf">MAF Calc</button>
@@ -241,8 +258,21 @@
     };
   });
 
-  initMafCalc();
-  initMapEditor();
+  try {
+    initMafCalc();
+  } catch (e) {
+    console.error("MAF Calc init failed:", e);
+    document.getElementById("globalError").style.display = "block";
+    document.getElementById("globalError").textContent = "⚠️ MAF Calc init failed:\n" + e.message;
+  }
+
+  try {
+    initMapEditor();
+  } catch (e) {
+    console.error("Map Editor init failed:", e);
+    document.getElementById("globalError").style.display = "block";
+    document.getElementById("globalError").textContent = "⚠️ Map Editor init failed:\n" + e.message;
+  }
 </script>
 
 <!-- app.js — оригинальная логика VE Calc, без изменений -->
