@@ -1,12 +1,20 @@
 /**
- * ve3d.js — Stage X style 3D VE editor
+ * ve3d.js — Stage X style 3D map editor
  * - Белая сетка с точками на пересечениях
  * - Клик — выбрать точку, Ctrl+клик — добавить к выделению
  * - +/- или стрелки вверх/вниз — менять значение выделенных
  * - Настраиваемый шаг 0.5–10
+ *
+ * options (необязательный 7-й параметр) — для использования с картами кроме VE:
+ *   { label: "VE %", min: 40, max: 130 }
+ * Если не передан — поведение идентично старому (VE, 40–130%), ничего не ломает.
  */
 
-export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpdate) {
+export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpdate, options) {
+
+  const VAL_LABEL = (options && options.label) || "VE %";
+  const VAL_MIN   = (options && typeof options.min === "number") ? options.min : 40;
+  const VAL_MAX   = (options && typeof options.max === "number") ? options.max : 130;
 
   const TOOLBAR_H = 50;
   const H = 550;
@@ -152,7 +160,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
     selected.forEach(k => {
       const [i, j] = k.split("_").map(Number);
-      veData[i][j] = Math.max(40, Math.min(130, veData[i][j] + delta));
+      veData[i][j] = Math.max(VAL_MIN, Math.min(VAL_MAX, veData[i][j] + delta));
     });
 
     sceneAPI.rebuild();
@@ -187,7 +195,11 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     const rows  = veData.length;
     const cols  = veData[0].length;
     let   W     = container.clientWidth;
-    if (!W || W < 100) W = container.parentElement ? container.parentElement.clientWidth : 900;
+    if (!W || W < 100) {
+      W = (container.parentElement && container.parentElement.clientWidth > 100)
+        ? container.parentElement.clientWidth
+        : (document.body.clientWidth || 900);
+    }
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.domElement.style.position = "absolute";
@@ -221,10 +233,11 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     function veColor(ve, vMin, vMax) {
       const t = (ve - vMin) / ((vMax - vMin) || 1);
       const c = new THREE.Color();
-      if      (t < 0.25) c.setRGB(0, t * 4, 1);
-      else if (t < 0.5)  c.setRGB(0, 1, 1 - (t - 0.25) * 4);
-      else if (t < 0.75) c.setRGB((t - 0.5) * 4, 1, 0);
-      else               c.setRGB(1, 1 - (t - 0.75) * 4, 0);
+      // Зелёный участок приглушён (0.75 макс вместо 1.0) — рельеф лучше читается
+      if      (t < 0.25) c.setRGB(0, t * 3, 1);
+      else if (t < 0.5)  c.setRGB(0, 0.75, 1 - (t - 0.25) * 3);
+      else if (t < 0.75) c.setRGB((t - 0.5) * 4, 0.75, 0);
+      else               c.setRGB(1, 0.75 * (1 - (t - 0.75) * 4), 0);
       return c;
     }
 
@@ -264,7 +277,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       }
       labelDefs.push({ pos: new THREE.Vector3(offsetX - 5, 2, 0),  text: "RPM",     color: "#44ff88", bold: true });
       labelDefs.push({ pos: new THREE.Vector3(0, -1, 19),           text: "MAP psi", color: "#ff8844", bold: true });
-      labelDefs.push({ pos: new THREE.Vector3(offsetX - 5, 10, offsetZ), text: "VE %", color: "#aaaaff", bold: true });
+      labelDefs.push({ pos: new THREE.Vector3(offsetX - 5, 10, offsetZ), text: VAL_LABEL, color: "#aaaaff", bold: true });
 
       labelEls = labelDefs.map(lp => {
         const el = document.createElement("div");
@@ -493,7 +506,7 @@ function createColorbarDOM(container) {
   wrap.style.cssText = "position:absolute;right:15px;top:60px;z-index:10;";
 
   const bar = document.createElement("div");
-  bar.style.cssText = "width:14px;height:180px;background:linear-gradient(to bottom,rgb(255,0,0),rgb(255,255,0),rgb(0,255,0),rgb(0,255,255),rgb(0,0,255));border-radius:3px;border:1px solid #333;";
+  bar.style.cssText = "width:14px;height:180px;background:linear-gradient(to bottom,rgb(255,0,0),rgb(255,191,0),rgb(0,191,0),rgb(0,191,191),rgb(0,0,255));border-radius:3px;border:1px solid #333;";
   wrap.appendChild(bar);
 
   const lblTop = document.createElement("div");

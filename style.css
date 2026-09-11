@@ -63,3 +63,43 @@ td {
   background: #ef5350;
   color: white;
 }
+
+/* ===== TABS ===== */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #ddd;
+}
+
+.tab-btn {
+  background: transparent;
+  color: #555;
+  border: none;
+  border-radius: 8px 8px 0 0;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+}
+
+.tab-btn:hover {
+  background: #eef2f9;
+}
+
+.tab-btn.active {
+  color: #4a7cff;
+  border-bottom: 3px solid #4a7cff;
+  background: #eef2f9;
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
