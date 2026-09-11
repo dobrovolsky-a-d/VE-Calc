@@ -55,7 +55,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   const clearBtn = btn("Снять выделение", "#555", () => {
     selected.clear();
     if (sceneAPI.rebuild) sceneAPI.rebuild();
-    updateInfoBar();
+    updateSelectionUI();
   });
 
   const resetViewBtn = btn("🎥 Сброс вида", "#456", () => {
@@ -79,7 +79,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   [stepLabel, stepInput, plusBtn, minusBtn, clearBtn, resetViewBtn, copyBtn, closeBtn].forEach(el => toolbar.appendChild(el));
   container.appendChild(toolbar);
 
-  /* ---------------- Info bar ---------------- */
+  /* ---------------- Info bar (общая строка снизу) ---------------- */
 
   const infoBar = document.createElement("div");
   infoBar.style.cssText = "position:absolute;bottom:10px;left:10px;z-index:20;color:#aaa;font-size:11px;font-family:system-ui;background:rgba(0,0,0,0.5);padding:4px 10px;border-radius:5px;";
@@ -98,7 +98,42 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     const max = Math.max(...vals).toFixed(1);
     infoBar.textContent = `Выделено: ${selected.size} ячеек | VE: ${min === max ? min : min + " – " + max}`;
   }
-  updateInfoBar();
+  updateSelectionUI();
+
+  /* ---------------- Detail panel (RPM/MAP/VE выбранных точек) ---------------- */
+  // Отдельная панель слева, под тулбаром — не перекрывает саму сетку с точками
+
+  const detailPanel = document.createElement("div");
+  detailPanel.style.cssText = "position:absolute;top:60px;left:10px;z-index:20;color:#ddd;font-size:11px;font-family:monospace;background:rgba(0,0,0,0.55);padding:8px 10px;border-radius:6px;max-height:180px;overflow-y:auto;min-width:150px;display:none;";
+  container.appendChild(detailPanel);
+
+  function updateDetailPanel() {
+    if (selected.size === 0) {
+      detailPanel.style.display = "none";
+      return;
+    }
+
+    detailPanel.style.display = "block";
+
+    const rows = [...selected].map(k => {
+      const [i, j] = k.split("_").map(Number);
+      return { rpm: Math.round(rpmAxis[i]), map: loadAxis[j].toFixed(1), ve: veData[i][j] };
+    });
+
+    // Сортируем по RPM затем по MAP для читаемости
+    rows.sort((a, b) => a.rpm - b.rpm || a.map - b.map);
+
+    const header = `<div style="color:#888;margin-bottom:4px;border-bottom:1px solid #333;padding-bottom:3px;">RPM &nbsp; MAP &nbsp; VE%</div>`;
+    const lines = rows.map(r =>
+      `<div>${String(r.rpm).padEnd(6)} ${String(r.map).padEnd(6)} <b style="color:#8cf;">${r.ve.toFixed(1)}</b></div>`
+    ).join("");
+
+    detailPanel.innerHTML = header + lines;
+  }
+  function updateSelectionUI() {
+    updateInfoBar();
+    updateDetailPanel();
+  }
 
   const hint = document.createElement("div");
   hint.style.cssText = "position:absolute;bottom:10px;right:15px;color:#555;font-size:10px;font-family:system-ui;z-index:10;";
@@ -118,7 +153,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     });
 
     sceneAPI.rebuild();
-    updateInfoBar();
+    updateSelectionUI();
     if (onTableUpdate) onTableUpdate(veData);
 
     isAdjusting = false;
@@ -129,7 +164,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     const step = parseFloat(stepInput.value) || 1;
     if (e.key === "+" || e.key === "=" || e.key === "ArrowUp")   { e.preventDefault(); adjustSelected(+step); }
     if (e.key === "-" || e.key === "_" || e.key === "ArrowDown") { e.preventDefault(); adjustSelected(-step); }
-    if (e.key === "Escape") { selected.clear(); if (sceneAPI.rebuild) sceneAPI.rebuild(); updateInfoBar(); }
+    if (e.key === "Escape") { selected.clear(); if (sceneAPI.rebuild) sceneAPI.rebuild(); updateSelectionUI(); }
   };
   window.addEventListener("keydown", keyHandler);
 
@@ -404,7 +439,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       } else {
         const hits = raycaster.intersectObject(surfaceMesh);
         if (hits.length === 0) {
-          if (!e.ctrlKey) { selected.clear(); rebuildSurface(); updateInfoBar(); }
+          if (!e.ctrlKey) { selected.clear(); rebuildSurface(); updateSelectionUI(); }
           return;
         }
         const pt = hits[0].point;
@@ -429,7 +464,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       }
 
       rebuildSurface();
-      updateInfoBar();
+      updateSelectionUI();
     });
 
     window.addEventListener("resize", () => {
