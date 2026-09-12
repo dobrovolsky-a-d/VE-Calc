@@ -70,8 +70,16 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   stepInput.step  = "0.5";
   stepInput.style.cssText = "width:55px;padding:4px;border-radius:5px;border:1px solid #444;background:#222;color:#fff;font-size:12px;text-align:center;";
 
-  const plusBtn  = btn("+ Вверх", "#2a6", () => adjustSelected(+parseFloat(stepInput.value)));
-  const minusBtn = btn("− Вниз",  "#a44", () => adjustSelected(-parseFloat(stepInput.value)));
+  const plusBtn  = btn("+ Вверх", "#2a6", () => {
+    plusBtn.disabled = true; minusBtn.disabled = true;
+    adjustSelected(+parseFloat(stepInput.value));
+    setTimeout(() => { plusBtn.disabled = false; minusBtn.disabled = false; }, 150);
+  });
+  const minusBtn = btn("− Вниз",  "#a44", () => {
+    plusBtn.disabled = true; minusBtn.disabled = true;
+    adjustSelected(-parseFloat(stepInput.value));
+    setTimeout(() => { plusBtn.disabled = false; minusBtn.disabled = false; }, 150);
+  });
 
   const clearBtn = btn("Снять выделение", "#555", () => {
     selected.clear();
@@ -187,8 +195,17 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   }
 
   let isAdjusting = false;
+  let lastAdjustTime = 0;
+  const MIN_ADJUST_INTERVAL_MS = 120; // жёсткий дебаунс — не даёт двум вызовам пройти быстрее этого окна
+
   function adjustSelected(delta) {
+    const now = Date.now();
     if (selected.size === 0 || isAdjusting || !sceneAPI.rebuild) return;
+    if (now - lastAdjustTime < MIN_ADJUST_INTERVAL_MS) {
+      console.warn("adjustSelected: заблокирован повторный вызов слишком быстро подряд, delta=", delta);
+      return;
+    }
+    lastAdjustTime = now;
     isAdjusting = true;
 
     pushHistory();
