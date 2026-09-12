@@ -432,8 +432,36 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       }));
       scene.add(surfaceMesh);
 
-      wireMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-        wireframe: true, color: 0x000000, opacity: 0.45, transparent: true
+      // Чистая сетка только по строкам/столбцам, без диагоналей треугольников —
+      // wireframe:true рисует ОБЕ диагонали каждого квада (т.к. поверхность состоит
+      // из треугольников), что визуально перегружает кривую. Рисуем линии сами.
+      const gridLinePositions = [];
+      for (let i = 0; i < rows; i++) {
+        for (let j = 0; j < cols - 1; j++) {
+          const idxA = i * cols + j;
+          const idxB = i * cols + j + 1;
+          gridLinePositions.push(
+            positions[idxA*3], positions[idxA*3+1], positions[idxA*3+2],
+            positions[idxB*3], positions[idxB*3+1], positions[idxB*3+2]
+          );
+        }
+      }
+      for (let j = 0; j < cols; j++) {
+        for (let i = 0; i < rows - 1; i++) {
+          const idxA = i * cols + j;
+          const idxB = (i + 1) * cols + j;
+          gridLinePositions.push(
+            positions[idxA*3], positions[idxA*3+1], positions[idxA*3+2],
+            positions[idxB*3], positions[idxB*3+1], positions[idxB*3+2]
+          );
+        }
+      }
+
+      const gridGeo = new THREE.BufferGeometry();
+      gridGeo.setAttribute("position", new THREE.Float32BufferAttribute(gridLinePositions, 3));
+
+      wireMesh = new THREE.LineSegments(gridGeo, new THREE.LineBasicMaterial({
+        color: 0x000000, opacity: 0.45, transparent: true
       }));
       scene.add(wireMesh);
 
