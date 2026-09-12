@@ -38,6 +38,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   let veData = veMatrix.map(r => [...r]);
   const originalData = veMatrix.map(r => [...r]); // неизменная копия — для наложения "до/после"
   let showOverlay = false;
+  let showSharpness = true; // подсветка резких перепадов между ячейками — включена по умолчанию
   const selected = new Set();
 
   // sceneAPI связывает toolbar-функции (adjustSelected и т.д.) с рендер-сценой,
@@ -119,7 +120,13 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     if (sceneAPI.rebuild) sceneAPI.rebuild();
   });
 
-  [stepLabel, stepInput, plusBtn, minusBtn, undoBtn, overlayBtn, clearBtn, resetViewBtn, copyBtn, closeBtn].forEach(el => toolbar.appendChild(el));
+  const sharpnessBtn = btn("⚡ Резкость", "#1abc9c", () => {
+    showSharpness = !showSharpness;
+    sharpnessBtn.style.background = showSharpness ? "#1abc9c" : "#7f8c8d";
+    if (sceneAPI.rebuild) sceneAPI.rebuild();
+  });
+
+  [stepLabel, stepInput, plusBtn, minusBtn, undoBtn, overlayBtn, sharpnessBtn, clearBtn, resetViewBtn, copyBtn, closeBtn].forEach(el => toolbar.appendChild(el));
   container.appendChild(toolbar);
 
   /* ---------------- Info bar (общая строка снизу) ---------------- */
@@ -388,6 +395,24 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       const ptPos     = [];
       const ptColors  = [];
 
+      // Разброс VE (для нормализации резкости перепадов между соседними ячейками)
+      const veRange = (vMax - vMin) || 1;
+
+      // Функция резкости: насколько сильно VE в ячейке (i,j) отличается от соседей,
+      // относительно общего разброса карты. 0 = плавно, 1 = резкий скачок.
+      function sharpnessAt(i, j) {
+        const v = veData[i][j];
+        let maxDiff = 0;
+        const neighbors = [[-1,0],[1,0],[0,-1],[0,1]];
+        neighbors.forEach(([di, dj]) => {
+          const ni = i + di, nj = j + dj;
+          if (ni >= 0 && ni < rows && nj >= 0 && nj < cols) {
+            maxDiff = Math.max(maxDiff, Math.abs(veData[ni][nj] - v));
+          }
+        });
+        return Math.min(1, maxDiff / (veRange * 0.15)); // 15% разброса карты = максимальная резкость
+      }
+
       for (let i = 0; i < rows; i++) {
         for (let j = 0; j < cols; j++) {
           const x = j * scaleX + offsetX;
@@ -399,7 +424,17 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
           const c   = veColor(veData[i][j], vMin, vMax);
           const dim = (mask && !mask[i][j]) ? 0.65 : 1.0;
-          colors.push(c.r * dim, c.g * dim, c.b * dim);
+
+          // Резкие перепады между соседями подсвечиваем ярче (к белому),
+          // плавные участки слегка притемняем — глаз сам цепляется за неровности
+          const sharp = showSharpness ? sharpnessAt(i, j) : 0;
+          const lightenFactor = sharp * 0.5;      // до +50% яркости на резких перепадах
+          const darkenFactor  = showSharpness ? (1 - sharp) * 0.15 : 0; // до -15% на плавных участках
+
+          const r = Math.min(1, c.r * dim * (1 - darkenFactor) + lightenFactor);
+          const g = Math.min(1, c.g * dim * (1 - darkenFactor) + lightenFactor);
+          const b = Math.min(1, c.b * dim * (1 - darkenFactor) + lightenFactor);
+          colors.push(r, g, b);
 
           if (selected.has(cellKey(i, j))) {
             ptPos.push(x, y + 0.12, z);
