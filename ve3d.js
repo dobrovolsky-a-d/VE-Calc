@@ -36,6 +36,8 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   container.style.height = (TOOLBAR_H + H) + "px";
 
   let veData = veMatrix.map(r => [...r]);
+  const originalData = veMatrix.map(r => [...r]); // неизменная копия — для наложения "до/после"
+  let showOverlay = false;
   const selected = new Set();
 
   // sceneAPI связывает toolbar-функции (adjustSelected и т.д.) с рендер-сценой,
@@ -109,7 +111,15 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   closeBtn.style.border = "1px solid rgba(255,255,255,0.25)";
 
   const undoBtn = btn("↩ Undo", "#8855cc", () => undo());
-  [stepLabel, stepInput, plusBtn, minusBtn, undoBtn, clearBtn, resetViewBtn, copyBtn, closeBtn].forEach(el => toolbar.appendChild(el));
+
+  const overlayBtn = btn("👁 Было/Стало", "#e67e22", () => {
+    showOverlay = !showOverlay;
+    overlayBtn.style.background = showOverlay ? "#27ae60" : "#e67e22";
+    overlayBtn.textContent = showOverlay ? "👁 Скрыть исходник" : "👁 Было/Стало";
+    if (sceneAPI.rebuild) sceneAPI.rebuild();
+  });
+
+  [stepLabel, stepInput, plusBtn, minusBtn, undoBtn, overlayBtn, clearBtn, resetViewBtn, copyBtn, closeBtn].forEach(el => toolbar.appendChild(el));
   container.appendChild(toolbar);
 
   /* ---------------- Info bar (общая строка снизу) ---------------- */
@@ -120,7 +130,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
   function updateInfoBar() {
     if (selected.size === 0) {
-      infoBar.textContent = "Клик по точке — выбрать | Ctrl+клик — добавить | +/- или ↑↓ — изменить";
+      infoBar.textContent = "Клик — выбрать | Ctrl+клик — добавить | Shift+тащить — область | +/- — изменить";
       return;
     }
     const vals = [...selected].map(k => {
@@ -173,7 +183,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
   const hint = document.createElement("div");
   hint.style.cssText = "position:absolute;bottom:10px;right:15px;color:#555;font-size:10px;font-family:system-ui;z-index:10;";
-  hint.textContent = "ЛКМ — вращать  |  Колёсико — зум  |  ПКМ — сдвиг";
+  hint.textContent = "ЛКМ — вращать  |  Колёсико — зум  |  ПКМ — сдвиг  |  Shift+ЛКМ — выделить область";
   container.appendChild(hint);
 
   /* ---------------- Изменение значений + Undo ---------------- */
@@ -301,6 +311,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     let surfaceMesh = null;
     let wireMesh    = null;
     let pointsMesh  = null;
+    let overlayMesh = null;
     const vertexPositions = [];
 
     // --- Colorbar (создаём DOM один раз, дальше только текст) ---
@@ -356,13 +367,19 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     }
 
     function rebuildSurface() {
-      if (surfaceMesh) { scene.remove(surfaceMesh); surfaceMesh.geometry.dispose(); surfaceMesh.material.dispose(); }
-      if (wireMesh)    { scene.remove(wireMesh);    wireMesh.geometry.dispose();    wireMesh.material.dispose(); }
-      if (pointsMesh)  { scene.remove(pointsMesh);  pointsMesh.geometry.dispose();  pointsMesh.material.dispose(); }
+      if (surfaceMesh)  { scene.remove(surfaceMesh);  surfaceMesh.geometry.dispose();  surfaceMesh.material.dispose(); }
+      if (wireMesh)     { scene.remove(wireMesh);     wireMesh.geometry.dispose();     wireMesh.material.dispose(); }
+      if (pointsMesh)   { scene.remove(pointsMesh);   pointsMesh.geometry.dispose();   pointsMesh.material.dispose(); }
+      if (overlayMesh)  { scene.remove(overlayMesh);  overlayMesh.geometry.dispose();  overlayMesh.material.dispose(); overlayMesh = null; }
 
       vertexPositions.length = 0;
 
-      const [vMin, vMax] = getVeMinMax();
+      // Диапазон высоты — общий для текущей и (если включено) исходной карты,
+      // иначе при overlay поверхности были бы в разном масштабе и накладывались неверно
+      let flatForRange = veData.flat();
+      if (showOverlay) flatForRange = flatForRange.concat(originalData.flat());
+      const vMin = Math.min(...flatForRange);
+      const vMax = Math.max(...flatForRange);
       const sy = getScaleY(vMin, vMax);
 
       const positions = [];
@@ -428,6 +445,41 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       }));
       scene.add(pointsMesh);
 
+      // --- Полупрозрачная поверхность исходной (немодифицированной) карты ---
+      if (showOverlay) {
+        const oPositions = [];
+        const oIndices   = [];
+
+        for (let i = 0; i < rows; i++) {
+          for (let j = 0; j < cols; j++) {
+            const x = j * scaleX + offsetX;
+            const y = (originalData[i][j] - vMin) * sy;
+            const z = i * scaleZ + offsetZ;
+            oPositions.push(x, y, z);
+          }
+        }
+        for (let i = 0; i < rows - 1; i++) {
+          for (let j = 0; j < cols - 1; j++) {
+            const a = i * cols + j;
+            const b = i * cols + j + 1;
+            const c = (i + 1) * cols + j;
+            const d = (i + 1) * cols + j + 1;
+            oIndices.push(a, c, b, b, c, d);
+          }
+        }
+
+        const oGeo = new THREE.BufferGeometry();
+        oGeo.setAttribute("position", new THREE.Float32BufferAttribute(oPositions, 3));
+        oGeo.setIndex(oIndices);
+        oGeo.computeVertexNormals();
+
+        overlayMesh = new THREE.Mesh(oGeo, new THREE.MeshBasicMaterial({
+          color: 0xffffff, wireframe: false, transparent: true, opacity: 0.25,
+          side: THREE.DoubleSide, depthWrite: false
+        }));
+        scene.add(overlayMesh);
+      }
+
       updateColorbarLabels(colorbar, vMin, vMax);
       rebuildLabels(vMin, vMax);
     }
@@ -465,16 +517,87 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     };
 
     renderer.domElement.addEventListener("contextmenu", e => e.preventDefault());
+
+    // --- Shift+перетаскивание — прямоугольное выделение нескольких точек сразу ---
+    let isBoxSelecting = false;
+    let boxStartX = 0, boxStartY = 0;
+
+    const selectionBox = document.createElement("div");
+    selectionBox.style.cssText = "position:absolute;border:1px solid #2ecbff;background:rgba(46,203,255,0.15);display:none;pointer-events:none;z-index:15;";
+    container.appendChild(selectionBox);
+
     renderer.domElement.addEventListener("mousedown", e => {
+      if (e.shiftKey && e.button === 0) {
+        isBoxSelecting = true;
+        const rect = renderer.domElement.getBoundingClientRect();
+        boxStartX = e.clientX - rect.left;
+        boxStartY = e.clientY - rect.top;
+        selectionBox.style.left   = boxStartX + "px";
+        selectionBox.style.top    = (TOOLBAR_H + boxStartY) + "px";
+        selectionBox.style.width  = "0px";
+        selectionBox.style.height = "0px";
+        selectionBox.style.display = "block";
+        return;
+      }
       isDragging = true;
       isRight    = e.button === 2;
       startX = lastX = e.clientX;
       startY = lastY = e.clientY;
       didDrag = false;
     });
-    window.addEventListener("mouseup", () => { isDragging = false; });
+
     window.addEventListener("mousemove", e => {
-      if (!isDragging) return;
+      if (isBoxSelecting) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const curX = e.clientX - rect.left;
+        const curY = e.clientY - rect.top;
+        const left = Math.min(boxStartX, curX);
+        const top  = Math.min(boxStartY, curY);
+        selectionBox.style.left   = left + "px";
+        selectionBox.style.top    = (TOOLBAR_H + top) + "px";
+        selectionBox.style.width  = Math.abs(curX - boxStartX) + "px";
+        selectionBox.style.height = Math.abs(curY - boxStartY) + "px";
+        return;
+      }
+    });
+
+    window.addEventListener("mouseup", e => {
+      if (isBoxSelecting) {
+        isBoxSelecting = false;
+        selectionBox.style.display = "none";
+
+        const rect = renderer.domElement.getBoundingClientRect();
+        const curX = e.clientX - rect.left;
+        const curY = e.clientY - rect.top;
+        const boxLeft   = Math.min(boxStartX, curX);
+        const boxRight  = Math.max(boxStartX, curX);
+        const boxTop    = Math.min(boxStartY, curY);
+        const boxBottom = Math.max(boxStartY, curY);
+
+        // Слишком маленький бокс — это случайный клик, а не выделение
+        if (boxRight - boxLeft < 4 && boxBottom - boxTop < 4) return;
+
+        if (!e.ctrlKey) selected.clear();
+
+        vertexPositions.forEach(vp => {
+          const screenPos = new THREE.Vector3(vp.x, vp.y, vp.z).project(camera);
+          const sx = (screenPos.x * 0.5 + 0.5) * rect.width;
+          const sy = (-screenPos.y * 0.5 + 0.5) * rect.height;
+
+          if (sx >= boxLeft && sx <= boxRight && sy >= boxTop && sy <= boxBottom && screenPos.z < 1) {
+            selected.add(cellKey(vp.i, vp.j));
+          }
+        });
+
+        rebuildSurface();
+        updateSelectionUI();
+        return;
+      }
+      isDragging = false;
+    });
+
+    window.addEventListener("mousemove", e => {
+      if (!isDragging || isBoxSelecting) return;
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
       lastX = e.clientX; lastY = e.clientY;
@@ -496,7 +619,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     const mouse = new THREE.Vector2();
 
     renderer.domElement.addEventListener("click", e => {
-      if (didDrag) return;
+      if (didDrag || e.shiftKey) return;
 
       const rect = renderer.domElement.getBoundingClientRect();
       mouse.x =  ((e.clientX - rect.left)  / rect.width)  * 2 - 1;
