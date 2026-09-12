@@ -18,6 +18,8 @@ let activeKeyHandler = null;
 
 export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpdate, options) {
 
+  console.log("[show3D] Вызван с options:", options);
+
   // Снимаем листенер предыдущего открытия 3D, если он ещё жив
   if (activeKeyHandler) {
     window.removeEventListener("keydown", activeKeyHandler);
@@ -27,6 +29,8 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   const VAL_LABEL = (options && options.label) || "VE %";
   const VAL_MIN   = (options && typeof options.min === "number") ? options.min : 40;
   const VAL_MAX   = (options && typeof options.max === "number") ? options.max : 130;
+
+  console.log(`[show3D] VAL_LABEL=${VAL_LABEL}, VAL_MIN=${VAL_MIN}, VAL_MAX=${VAL_MAX}`);
 
   const TOOLBAR_H = 50;
   const H = 550;
@@ -200,9 +204,14 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
   function adjustSelected(delta) {
     const now = Date.now();
-    if (selected.size === 0 || isAdjusting || !sceneAPI.rebuild) return;
+    console.log(`[adjustSelected] ВЫЗВАН: delta=${delta}, selected.size=${selected.size}, isAdjusting=${isAdjusting}`);
+
+    if (selected.size === 0 || isAdjusting || !sceneAPI.rebuild) {
+      console.log(`[adjustSelected] ПРОПУЩЕН (условие выхода)`);
+      return;
+    }
     if (now - lastAdjustTime < MIN_ADJUST_INTERVAL_MS) {
-      console.warn("adjustSelected: заблокирован повторный вызов слишком быстро подряд, delta=", delta);
+      console.warn("[adjustSelected] ЗАБЛОКИРОВАН дебаунсом, delta=", delta);
       return;
     }
     lastAdjustTime = now;
@@ -212,7 +221,9 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
     selected.forEach(k => {
       const [i, j] = k.split("_").map(Number);
+      const before = veData[i][j];
       veData[i][j] = Math.max(VAL_MIN, Math.min(VAL_MAX, veData[i][j] + delta));
+      console.log(`[adjustSelected] ${k}: ${before.toFixed(2)} → ${veData[i][j].toFixed(2)} (delta=${delta}, VAL_MIN=${VAL_MIN}, VAL_MAX=${VAL_MAX})`);
     });
 
     sceneAPI.rebuild();
