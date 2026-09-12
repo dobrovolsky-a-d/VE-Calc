@@ -193,8 +193,21 @@
 <div id="tab-mapeditor" class="tab-panel">
 
   <div class="card">
+    <h3>Сохранённые карты</h3>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <select id="savedMapsSelect" style="flex:1; min-width:200px; padding:8px; border-radius:6px; border:1px solid #ccc;">
+        <option value="">— новая карта —</option>
+      </select>
+      <button type="button" id="deleteSavedMapBtn" style="background:#c0392b;">🗑 Удалить</button>
+    </div>
+  </div>
+
+  <div class="card">
     <h3>Любая карта RPM × Load</h3>
     <p style="font-size:13px;color:#666;margin-top:-6px;">Игнишн, буст таргет, и любая другая 2D карта — вставь оси и таблицу, отредактируй в 3D.</p>
+
+    <label>Название карты</label>
+    <input type="text" id="mapNameInput" placeholder="например: Boost Target ORI" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc; margin-bottom:12px; box-sizing:border-box;">
 
     <label>RPM Axis</label>
     <textarea id="mapRpmAxis"></textarea>

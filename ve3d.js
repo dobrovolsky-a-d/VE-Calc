@@ -66,7 +66,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
   const stepInput = document.createElement("input");
   stepInput.type  = "number";
-  stepInput.value = "1";
+  stepInput.value = "0.1";
   stepInput.min   = "0.1";
   stepInput.max   = "10";
   stepInput.step  = "0.1";
@@ -236,7 +236,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
   const keyHandler = (e) => {
     if (e.target.tagName === "INPUT") return;
-    const step = parseFloat(stepInput.value) || 1;
+    const step = parseFloat(stepInput.value) || 0.1;
     if (e.key === "+" || e.key === "=" || e.key === "ArrowUp")   { e.preventDefault(); adjustSelected(+step); }
     if (e.key === "-" || e.key === "_" || e.key === "ArrowDown") { e.preventDefault(); adjustSelected(-step); }
     if (e.key === "Escape") { selected.clear(); if (sceneAPI.rebuild) sceneAPI.rebuild(); updateSelectionUI(); }
