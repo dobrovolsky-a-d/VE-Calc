@@ -2,12 +2,28 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Tuning Suite</title>
+  <title>Dobre Tuning Suite</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<h1>Tuning Suite</h1>
+<div style="display:flex; align-items:center; gap:14px; margin-bottom:10px;">
+  <svg width="52" height="52" viewBox="0 0 52 52" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="26" cy="26" r="24" fill="#1a1a2e" stroke="#4a7cff" stroke-width="2"/>
+    <!-- Тахометр-шкала -->
+    <path d="M 12 34 A 16 16 0 1 1 40 34" fill="none" stroke="#333355" stroke-width="3"/>
+    <path d="M 12 34 A 16 16 0 0 1 32 12.5" fill="none" stroke="#e74c3c" stroke-width="3"/>
+    <!-- Стрелка -->
+    <line x1="26" y1="26" x2="34" y2="17" stroke="#4a7cff" stroke-width="2.5" stroke-linecap="round"/>
+    <circle cx="26" cy="26" r="3" fill="#4a7cff"/>
+    <!-- D буква намёком -->
+    <text x="26" y="45" text-anchor="middle" font-family="system-ui" font-weight="800" font-size="9" fill="#4a7cff">DTS</text>
+  </svg>
+  <div>
+    <h1 style="margin:0; line-height:1.1;">Dobre <span style="color:#4a7cff;">Tuning Suite</span></h1>
+    <div style="font-size:12px; color:#888; margin-top:2px;">VE Calc · MAF Calc · 3D Map Editor</div>
+  </div>
+</div>
 
 <div id="globalError" style="display:none;background:#ffebee;border:2px solid #e53935;border-radius:8px;padding:14px;margin-bottom:15px;color:#b71c1c;font-family:monospace;font-size:13px;white-space:pre-wrap;"></div>
 
@@ -225,8 +241,11 @@
     <div style="display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
       <button type="button" class="map-preset-btn" data-label="VE %" data-min="40" data-max="130" style="background:#95a5a6;">VE %</button>
       <button type="button" class="map-preset-btn" data-label="Ignition °" data-min="-10" data-max="40" style="background:#95a5a6;">Ignition °</button>
-      <button type="button" class="map-preset-btn" data-label="Boost Target" data-min="0" data-max="30" style="background:#95a5a6;">Boost Target (psi)</button>
+      <button type="button" class="map-preset-btn" data-label="Boost Target (psi)" data-min="0" data-max="30" style="background:#95a5a6;">Boost Target (psi)</button>
+      <button type="button" class="map-preset-btn" data-label="Boost Target (bar)" data-min="0" data-max="3" style="background:#95a5a6;">Boost Target (bar)</button>
       <button type="button" class="map-preset-btn" data-label="AFR" data-min="10" data-max="14.7" style="background:#95a5a6;">AFR</button>
+      <button type="button" class="map-preset-btn" data-label="Wastegate %" data-min="0" data-max="100" style="background:#95a5a6;">Wastegate %</button>
+      <button type="button" class="map-preset-btn" data-label="AVCS °" data-min="0" data-max="50" style="background:#95a5a6;">AVCS °</button>
     </div>
 
     <div style="display:flex; gap:20px; align-items:center; flex-wrap:wrap;">

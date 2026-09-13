@@ -111,6 +111,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   closeBtn.style.border = "1px solid rgba(255,255,255,0.25)";
 
   const undoBtn = btn("↩ Undo", "#8855cc", () => undo());
+  const redoBtn = btn("↪ Redo", "#8855cc", () => redo());
 
   const overlayBtn = btn("👁 Было/Стало", "#e67e22", () => {
     showOverlay = !showOverlay;
@@ -119,7 +120,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     if (sceneAPI.rebuild) sceneAPI.rebuild();
   });
 
-  [stepLabel, stepInput, plusBtn, minusBtn, undoBtn, overlayBtn, clearBtn, resetViewBtn, copyBtn, closeBtn].forEach(el => toolbar.appendChild(el));
+  [stepLabel, stepInput, plusBtn, minusBtn, undoBtn, redoBtn, overlayBtn, clearBtn, resetViewBtn, copyBtn, closeBtn].forEach(el => toolbar.appendChild(el));
   container.appendChild(toolbar);
 
   /* ---------------- Info bar (общая строка снизу) ---------------- */
@@ -186,19 +187,31 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   hint.textContent = "ЛКМ — вращать  |  Колёсико — зум  |  ПКМ — сдвиг  |  Shift+ЛКМ — выделить область";
   container.appendChild(hint);
 
-  /* ---------------- Изменение значений + Undo ---------------- */
+  /* ---------------- Изменение значений + Undo/Redo ---------------- */
 
-  const history = []; // стек снапшотов veData перед каждым изменением
+  const history = []; // стек снапшотов veData перед каждым изменением (для Undo)
+  const redoStack = []; // снапшоты, "отменённые" через Undo — для Redo
   const MAX_HISTORY = 50;
 
   function pushHistory() {
     history.push(veData.map(r => [...r]));
     if (history.length > MAX_HISTORY) history.shift();
+    redoStack.length = 0; // новое действие после undo стирает ветку redo — как везде
   }
 
   function undo() {
     if (history.length === 0 || !sceneAPI.rebuild) return;
+    redoStack.push(veData.map(r => [...r]));
     veData = history.pop();
+    sceneAPI.rebuild();
+    updateSelectionUI();
+    if (onTableUpdate) onTableUpdate(veData);
+  }
+
+  function redo() {
+    if (redoStack.length === 0 || !sceneAPI.rebuild) return;
+    history.push(veData.map(r => [...r]));
+    veData = redoStack.pop();
     sceneAPI.rebuild();
     updateSelectionUI();
     if (onTableUpdate) onTableUpdate(veData);
@@ -240,7 +253,9 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     if (e.key === "+" || e.key === "=" || e.key === "ArrowUp")   { e.preventDefault(); adjustSelected(+step); }
     if (e.key === "-" || e.key === "_" || e.key === "ArrowDown") { e.preventDefault(); adjustSelected(-step); }
     if (e.key === "Escape") { selected.clear(); if (sceneAPI.rebuild) sceneAPI.rebuild(); updateSelectionUI(); }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z") { e.preventDefault(); undo(); }
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "z") { e.preventDefault(); redo(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); }
   };
 
   activeKeyHandler = keyHandler;
