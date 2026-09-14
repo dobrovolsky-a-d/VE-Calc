@@ -29,7 +29,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
   const VAL_MAX   = (options && typeof options.max === "number") ? options.max : 130;
 
   const TOOLBAR_H = 50;
-  const H = 550;
+  let H = 550;
 
   container.innerHTML = "";
   container.style.cssText = "width:100%;position:relative;background:#111;border-radius:10px;overflow:hidden;";
@@ -120,8 +120,26 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     if (sceneAPI.rebuild) sceneAPI.rebuild();
   });
 
-  [stepLabel, stepInput, plusBtn, minusBtn, undoBtn, redoBtn, overlayBtn, clearBtn, resetViewBtn, copyBtn, closeBtn].forEach(el => toolbar.appendChild(el));
+  const fullscreenBtn = btn("⛶ Во весь экран", "#2980b9", () => {
+    if (!document.fullscreenElement) {
+      container.requestFullscreen?.() || container.webkitRequestFullscreen?.();
+    } else {
+      document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+    }
+  });
+
+  [stepLabel, stepInput, plusBtn, minusBtn, undoBtn, redoBtn, overlayBtn, fullscreenBtn, clearBtn, resetViewBtn, copyBtn, closeBtn].forEach(el => toolbar.appendChild(el));
   container.appendChild(toolbar);
+
+  // Пересчёт размера canvas при входе/выходе из полноэкранного режима —
+  // используем sceneAPI.resize, который регистрируется ниже после создания renderer/camera
+  document.addEventListener("fullscreenchange", () => {
+    const isFs = document.fullscreenElement === container;
+    fullscreenBtn.textContent = isFs ? "⛶ Выйти" : "⛶ Во весь экран";
+    H = isFs ? (window.innerHeight - TOOLBAR_H) : 550;
+    container.style.height = isFs ? "100vh" : (TOOLBAR_H + H) + "px";
+    if (sceneAPI.resize) sceneAPI.resize();
+  });
 
   /* ---------------- Info bar (общая строка снизу) ---------------- */
 
@@ -706,12 +724,16 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       updateSelectionUI();
     });
 
-    window.addEventListener("resize", () => {
+    function doResize() {
       const W2 = container.clientWidth;
       renderer.setSize(W2, H);
       camera.aspect = W2 / H;
       camera.updateProjectionMatrix();
-    });
+    }
+
+    sceneAPI.resize = doResize;
+
+    window.addEventListener("resize", doResize);
 
     function animate() {
       requestAnimationFrame(animate);

@@ -1,4 +1,4 @@
-/* DoKu Log Viewer — Design System
+/* Logger — Design System
    Скоупировано под .log-viewer-scope, чтобы не протекать на остальные вкладки
    (в оригинале эти 4 правила были глобальными: :root, *, html/body, body) */
 
@@ -41,9 +41,8 @@
   color: var(--text);
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
-  height: 100vh;
-  overflow: hidden;
   border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.12);
 }
 
 .log-viewer-scope *,
@@ -57,10 +56,8 @@
 /* ── LAYOUT ── */
 .app {
   display: flex;
-  height: 85vh;
+  align-items: flex-start;
   min-height: 600px;
-  overflow: hidden;
-  border-radius: 10px;
 }
 
 /* ── SIDEBAR ── */
@@ -69,10 +66,14 @@
   flex-shrink: 0;
   background: var(--surface);
   border-right: 1px solid var(--border);
+  border-radius: 10px 0 0 10px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   transition: width .2s ease, opacity .2s ease;
+  max-height: 85vh;
+  position: sticky;
+  top: 12px;
 }
 
 .sidebar.collapsed {
@@ -395,7 +396,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   min-width: 0;
 }
 
@@ -404,6 +405,7 @@
   height: var(--topbar-h);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  border-radius: 0 10px 0 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -591,17 +593,13 @@
 /* PLOTS WRAP */
 .plots-wrap {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
   padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  border-radius: 0 0 10px 0;
 }
-
-.plots-wrap::-webkit-scrollbar { width: 4px; }
-.plots-wrap::-webkit-scrollbar-track { background: transparent; }
-.plots-wrap::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
 
 /* EMPTY STATE */
 .empty-state {
@@ -647,6 +645,15 @@
 
 .plot-title-name { color: var(--text-dim); font-weight: 500; }
 .plot-title-unit { color: var(--text-muted); }
+.plot-title-minmax {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 500;
+  background: var(--accent-soft);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
 
 .plot-div {
   width: 100%;

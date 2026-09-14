@@ -1,4 +1,4 @@
-// DoKu Log Viewer — v2.0
+// Logger — v2.0
 // RomRaider / EcuFlash CSV · Multi-file · Overlay + Stacked · Synchronized zoom
 
 'use strict';
@@ -448,8 +448,33 @@ function buildStacked() {
   });
 }
 
+function getMinMaxForParam(param) {
+  let min = Infinity, max = -Infinity;
+
+  state.files.forEach(file => {
+    getY(file, param).forEach(v => {
+      if (v === null) return;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    });
+  });
+
+  if (!isFinite(min) || !isFinite(max)) return null;
+  return { min, max };
+}
+
+function formatMinMax(mm) {
+  if (!mm) return '';
+  // Подбираем точность отображения по масштабу значений — не показываем
+  // лишние нули для крупных чисел (RPM) и не теряем точность для мелких (AFR, lambda)
+  const range = mm.max - mm.min;
+  const decimals = range < 5 ? 2 : (range < 50 ? 1 : 0);
+  return `min: ${mm.min.toFixed(decimals)}  max: ${mm.max.toFixed(decimals)}`;
+}
+
 function appendStackedCard(param) {
   const unit = getUnitForParam(param);
+  const mm = getMinMaxForParam(param);
 
   const card = document.createElement('div');
   card.className = 'plot-card';
@@ -457,7 +482,7 @@ function appendStackedCard(param) {
 
   const title = document.createElement('div');
   title.className = 'plot-title';
-  title.innerHTML = `<span class="plot-title-name">${param}</span>${unit ? `<span class="plot-title-unit">(${unit})</span>` : ''}`;
+  title.innerHTML = `<span class="plot-title-name">${param}</span>${unit ? `<span class="plot-title-unit">(${unit})</span>` : ''}${mm ? `<span class="plot-title-minmax">${formatMinMax(mm)}</span>` : ''}`;
 
   const div = document.createElement('div');
   div.className = 'plot-div';
