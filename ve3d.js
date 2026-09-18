@@ -345,6 +345,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
     let wireMesh    = null;
     let pointsMesh  = null;
     let overlayMesh = null;
+    let overlayGridMesh = null;
     const vertexPositions = [];
 
     // --- Colorbar (создаём DOM один раз, дальше только текст) ---
@@ -404,6 +405,7 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       if (wireMesh)     { scene.remove(wireMesh);     wireMesh.geometry.dispose();     wireMesh.material.dispose(); }
       if (pointsMesh)   { scene.remove(pointsMesh);   pointsMesh.geometry.dispose();   pointsMesh.material.dispose(); }
       if (overlayMesh)  { scene.remove(overlayMesh);  overlayMesh.geometry.dispose();  overlayMesh.material.dispose(); overlayMesh = null; }
+      if (overlayGridMesh) { scene.remove(overlayGridMesh); overlayGridMesh.geometry.dispose(); overlayGridMesh.material.dispose(); overlayGridMesh = null; }
 
       vertexPositions.length = 0;
 
@@ -506,9 +508,13 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
       }));
       scene.add(pointsMesh);
 
-      // --- Полупрозрачная поверхность исходной (немодифицированной) карты ---
+      // --- Притушенная поверхность исходной (немодифицированной) карты ---
+      // Раньше рисовалась просто белым силуэтом — плохо читалась.
+      // Теперь использует ту же цветовую шкалу VE, но приглушённую (тусклее и темнее),
+      // плюс тонкий контур сетки — форма старой карты сразу узнаётся на глаз.
       if (showOverlay) {
         const oPositions = [];
+        const oColors    = [];
         const oIndices   = [];
 
         for (let i = 0; i < rows; i++) {
@@ -517,6 +523,15 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
             const y = (originalData[i][j] - vMin) * sy;
             const z = i * scaleZ + offsetZ;
             oPositions.push(x, y, z);
+
+            const oc = veColor(originalData[i][j], vMin, vMax);
+            // Притушиваем: тянем к серому и делаем темнее — читается как "призрак" старой карты
+            const dimAmt = 0.45;
+            oColors.push(
+              oc.r * dimAmt + 0.15,
+              oc.g * dimAmt + 0.15,
+              oc.b * dimAmt + 0.15
+            );
           }
         }
         for (let i = 0; i < rows - 1; i++) {
@@ -531,14 +546,42 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
         const oGeo = new THREE.BufferGeometry();
         oGeo.setAttribute("position", new THREE.Float32BufferAttribute(oPositions, 3));
+        oGeo.setAttribute("color",    new THREE.Float32BufferAttribute(oColors, 3));
         oGeo.setIndex(oIndices);
         oGeo.computeVertexNormals();
 
         overlayMesh = new THREE.Mesh(oGeo, new THREE.MeshBasicMaterial({
-          color: 0xffffff, wireframe: false, transparent: true, opacity: 0.25,
+          vertexColors: true, transparent: true, opacity: 0.55,
           side: THREE.DoubleSide, depthWrite: false
         }));
         scene.add(overlayMesh);
+
+        // Тонкий контур сетки старой карты — только по строкам/столбцам, без диагоналей
+        const oGridPositions = [];
+        for (let i = 0; i < rows; i++) {
+          for (let j = 0; j < cols - 1; j++) {
+            const idxA = i * cols + j, idxB = i * cols + j + 1;
+            oGridPositions.push(
+              oPositions[idxA*3], oPositions[idxA*3+1], oPositions[idxA*3+2],
+              oPositions[idxB*3], oPositions[idxB*3+1], oPositions[idxB*3+2]
+            );
+          }
+        }
+        for (let j = 0; j < cols; j++) {
+          for (let i = 0; i < rows - 1; i++) {
+            const idxA = i * cols + j, idxB = (i + 1) * cols + j;
+            oGridPositions.push(
+              oPositions[idxA*3], oPositions[idxA*3+1], oPositions[idxA*3+2],
+              oPositions[idxB*3], oPositions[idxB*3+1], oPositions[idxB*3+2]
+            );
+          }
+        }
+        const oGridGeo = new THREE.BufferGeometry();
+        oGridGeo.setAttribute("position", new THREE.Float32BufferAttribute(oGridPositions, 3));
+        overlayGridMesh = new THREE.LineSegments(oGridGeo, new THREE.LineBasicMaterial({
+          color: 0xffffff, opacity: 0.5, transparent: true
+        }));
+        scene.add(overlayGridMesh);
       }
 
       updateColorbarLabels(colorbar, vMin, vMax);
@@ -553,6 +596,28 @@ export function show3D(container, veMatrix, rpmAxis, loadAxis, mask, onTableUpda
 
     const grid = new THREE.GridHelper(30, 10, 0x333333, 0x222222);
     scene.add(grid);
+
+    // --- Стрелки осей на минимальных значениях — показывают направление роста ---
+    // и откуда начинается график, чтобы не терять ориентацию при вращении камеры
+    function makeAxisArrow(dir, origin, color, length) {
+      const arrow = new THREE.ArrowHelper(
+        dir.clone().normalize(),
+        origin,
+        length,
+        color,
+        length * 0.18, // головка
+        length * 0.09  // ширина головки
+      );
+      scene.add(arrow);
+      return arrow;
+    }
+
+    // RPM растёт вдоль +Z, начало на offsetZ (минимальный RPM)
+    makeAxisArrow(new THREE.Vector3(0, 0, 1), new THREE.Vector3(offsetX, 0, offsetZ), 0x44ff88, 6);
+    // MAP растёт вдоль +X, начало на offsetX (минимальный MAP/Load)
+    makeAxisArrow(new THREE.Vector3(1, 0, 0), new THREE.Vector3(offsetX, 0, offsetZ), 0xff8844, 6);
+    // Значение (VE/Ignition/...) растёт вдоль +Y, начало у пола сетки
+    makeAxisArrow(new THREE.Vector3(0, 1, 0), new THREE.Vector3(offsetX, 0, offsetZ), 0xaaaaff, 6);
 
     /* ---------------- Camera orbit ---------------- */
 

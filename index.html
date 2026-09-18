@@ -233,10 +233,10 @@
 
     <div style="display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
       <button type="button" class="map-preset-btn" data-label="VE %" data-min="40" data-max="130" style="background:#95a5a6;">VE %</button>
-      <button type="button" class="map-preset-btn" data-label="Ignition °" data-min="-10" data-max="40" style="background:#95a5a6;">Ignition °</button>
-      <button type="button" class="map-preset-btn" data-label="Boost Target (psi)" data-min="0" data-max="30" style="background:#95a5a6;">Boost Target (psi)</button>
+      <button type="button" class="map-preset-btn" data-label="Ignition °" data-min="-10" data-max="50" style="background:#95a5a6;">Ignition °</button>
+      <button type="button" class="map-preset-btn" data-label="Boost Target (psi)" data-min="-1" data-max="30" style="background:#95a5a6;">Boost Target (psi)</button>
       <button type="button" class="map-preset-btn" data-label="Boost Target (bar)" data-min="0" data-max="3" style="background:#95a5a6;">Boost Target (bar)</button>
-      <button type="button" class="map-preset-btn" data-label="AFR" data-min="10" data-max="14.7" style="background:#95a5a6;">AFR</button>
+      <button type="button" class="map-preset-btn" data-label="AFR" data-min="9" data-max="14.7" style="background:#95a5a6;">AFR</button>
       <button type="button" class="map-preset-btn" data-label="Wastegate %" data-min="0" data-max="100" style="background:#95a5a6;">Wastegate %</button>
       <button type="button" class="map-preset-btn" data-label="AVCS °" data-min="0" data-max="50" style="background:#95a5a6;">AVCS °</button>
     </div>
@@ -313,6 +313,12 @@
     <div class="sidebar-section" id="overlaySection" style="display:none">
       <div class="section-label">Наложение</div>
       <div class="overlay-tip" id="overlayTip">Выбранные параметры строятся на одном графике. Используй оси Y1/Y2 для разных диапазонов.</div>
+
+      <label class="overlay-sync-toggle" style="display:flex;align-items:center;gap:8px;margin:10px 0;font-size:12px;color:var(--text-dim);cursor:pointer;">
+        <input type="checkbox" id="syncByRpmToggle">
+        Синхронизировать заезды по RPM (вместо времени)
+      </label>
+
       <div id="axisAssign" class="axis-assign"></div>
     </div>
 

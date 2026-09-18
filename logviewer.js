@@ -31,6 +31,7 @@ const state = {
   plots: [],          // { div, param, fileId? } in stacked; [{div}] in overlay
   zoomRange: null,    // { xMin, xMax }
   syncZoom: false,
+  syncByRpm: false,   // overlay mode: align multiple runs by RPM instead of time
 };
 
 // ─── DOM REFS ─────────────────────────────────────────────────────────────────
@@ -56,6 +57,7 @@ const overlayTip      = $('overlayTip');
 const axisAssignEl    = $('axisAssign');
 const sidebarToggle   = $('sidebarToggle');
 const sidebar         = $('sidebar');
+const syncByRpmToggle = $('syncByRpmToggle');
 
 // ─── CSV PARSER ───────────────────────────────────────────────────────────────
 
@@ -336,7 +338,7 @@ function onParamChange(param, selected) {
 
 function renderAxisAssign() {
   overlayTip.textContent = state.files.length > 1
-    ? 'Цвет линии = файл, стиль (пунктир/точка) = параметр. Оси Y1/Y2 — для разных диапазонов значений.'
+    ? 'Цвет линии = файл, стиль (пунктир/точка) = параметр. Оси Y1/Y2 — для разных диапазонов значений. Разные заезды? Включи синхронизацию по RPM ниже.'
     : 'Выбранные параметры строятся на одном графике. Используй оси Y1/Y2 для разных диапазонов.';
 
   axisAssignEl.innerHTML = '';
@@ -411,6 +413,32 @@ function getTimeX(file) {
   return file.timeValues;
 }
 
+// Находим колонку RPM в файле по тому же паттерну, что группирует параметры в сайдбаре —
+// используется для синхронизации нескольких заездов по оборотам вместо времени
+const RPM_PATTERN = /rpm|revs|engine.speed/i;
+
+function findRpmColumn(file) {
+  if (file._rpmColumnCache !== undefined) return file._rpmColumnCache;
+  const found = file.headers.find(h => RPM_PATTERN.test(h)) || null;
+  file._rpmColumnCache = found;
+  return found;
+}
+
+function getRpmX(file) {
+  const rpmCol = findRpmColumn(file);
+  if (!rpmCol) return null; // нет RPM-колонки в этом файле — синхронизация недоступна
+  return getY(file, rpmCol);
+}
+
+// Единая точка выбора оси X для overlay — время по умолчанию, RPM если включена синхронизация
+function getOverlayX(file) {
+  if (state.syncByRpm) {
+    const rpmX = getRpmX(file);
+    if (rpmX) return rpmX;
+  }
+  return getTimeX(file);
+}
+
 function getY(file, param) {
   return file.rows.map(r => {
     const v = parseFloat(String(r[param] ?? '').replace(',', '.'));
@@ -419,15 +447,16 @@ function getY(file, param) {
 }
 
 function makeTrace(file, param, overrides = {}) {
+  const { xSource, ...restOverrides } = overrides;
   return {
-    x: getTimeX(file),
+    x: xSource === 'overlay' ? getOverlayX(file) : getTimeX(file),
     y: getY(file, param),
     mode: 'lines',
     name: state.files.length > 1 ? file.name : param,
     line: { color: file.color, width: 1.5 },
     connectgaps: false,
     hovertemplate: `%{y:.3f}<extra>${file.name}</extra>`,
-    ...overrides,
+    ...restOverrides,
   };
 }
 
@@ -578,6 +607,7 @@ function buildOverlay() {
         line: { color: lineColor, width: 1.5, dash },
         yaxis: axis === 'y2' ? 'y2' : 'y',
         hovertemplate: `%{y:.3f}<extra>${file.name} · ${param}</extra>`,
+        xSource: 'overlay',
       }));
     });
   });
@@ -593,7 +623,7 @@ function buildOverlay() {
     },
     xaxis: {
       ...PLOTLY_LAYOUT_BASE.xaxis,
-      title: { text: 'Time (s)', font: { size: 10 } },
+      title: { text: state.syncByRpm ? 'RPM' : 'Time (s)', font: { size: 10 } },
       range: state.zoomRange ? [state.zoomRange.xMin, state.zoomRange.xMax] : undefined,
     },
     yaxis: {
@@ -717,14 +747,20 @@ function attachCrosshair(div, param) {
 
 function updateCrosshairBar(xVal) {
   crosshairBar.style.display = 'flex';
-  crosshairTime.textContent = typeof xVal === 'number' ? xVal.toFixed(3) + ' s' : xVal;
+  crosshairTime.textContent = typeof xVal === 'number'
+    ? xVal.toFixed(state.mode === 'overlay' && state.syncByRpm ? 0 : 3) + (state.mode === 'overlay' && state.syncByRpm ? ' rpm' : ' s')
+    : xVal;
 
   crosshairValues.innerHTML = '';
   const multiFile = state.files.length > 1;
 
   state.files.forEach(file => {
-    // Find closest row
-    const idx = findClosestIndex(file.timeValues, xVal);
+    // В overlay-режиме с синхронизацией по RPM ищем ближайшую точку по значению RPM
+    // этого конкретного файла, а не по времени — иначе значения будут неверными
+    const xSource = (state.mode === 'overlay' && state.syncByRpm) ? getRpmX(file) : file.timeValues;
+    const idx = xSource
+      ? (state.syncByRpm ? findClosestIndexLinear(xSource, xVal) : findClosestIndex(xSource, xVal))
+      : -1;
     if (idx === -1) return;
     const row = file.rows[idx];
 
@@ -784,6 +820,19 @@ function findClosestIndex(timeValues, target) {
     else hi = mid;
   }
   return lo;
+}
+
+// Линейный поиск ближайшего значения — нужен для RPM и других немонотонных рядов
+// (обороты растут и падают внутри заезда, бинарный поиск для них некорректен)
+function findClosestIndexLinear(values, target) {
+  if (!values || !values.length) return -1;
+  let bestIdx = -1, bestDiff = Infinity;
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] === null || values[i] === undefined) continue;
+    const diff = Math.abs(values[i] - target);
+    if (diff < bestDiff) { bestDiff = diff; bestIdx = i; }
+  }
+  return bestIdx;
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -912,6 +961,22 @@ syncZoomBtn.addEventListener('click', () => {
   syncZoomBtn.style.borderColor = state.syncZoom ? 'var(--accent)' : '';
   syncZoomBtn.title = state.syncZoom ? 'Синхронизация включена' : 'Синхронизировать зум';
 });
+
+if (syncByRpmToggle) {
+  syncByRpmToggle.addEventListener('change', () => {
+    state.syncByRpm = syncByRpmToggle.checked;
+    state.zoomRange = null; // старый диапазон зума в секундах бессмысленен в шкале RPM
+
+    if (state.syncByRpm) {
+      const missingRpm = state.files.filter(f => !findRpmColumn(f));
+      if (missingRpm.length) {
+        alert(`В файле(ах) не найдена колонка RPM — синхронизация для них недоступна, останутся по времени:\n${missingRpm.map(f => f.name).join('\n')}`);
+      }
+    }
+
+    if (state.mode === 'overlay') rebuildAll();
+  });
+}
 
 sidebarToggle.addEventListener('click', () => {
   sidebar.classList.toggle('collapsed');
