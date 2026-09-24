@@ -20,6 +20,28 @@ out.parentNode.insertBefore(debug, out);
 
 function setDebug(t) { debug.innerText = t; }
 
+/* ---------- ANISOTROPY SLIDER (только для IDW/Smart режима) ---------- */
+const modeSelect        = document.getElementById("mode");
+const anisotropyControl = document.getElementById("anisotropyControl");
+const anisotropySlider  = document.getElementById("smartAnisotropy");
+const anisotropyValueEl = document.getElementById("anisotropyValue");
+
+function updateAnisotropyVisibility() {
+  if (!modeSelect || !anisotropyControl) return;
+  anisotropyControl.style.display = modeSelect.value === "smart" ? "block" : "none";
+}
+
+if (modeSelect) {
+  modeSelect.addEventListener("change", updateAnisotropyVisibility);
+  updateAnisotropyVisibility(); // выставляем начальное состояние при загрузке
+}
+
+if (anisotropySlider && anisotropyValueEl) {
+  anisotropySlider.addEventListener("input", () => {
+    anisotropyValueEl.textContent = parseFloat(anisotropySlider.value).toFixed(2);
+  });
+}
+
 /* ---------- LOAD LOGS ---------- */
 document.getElementById("loadLog").onchange = async (e) => {
   try {
@@ -80,7 +102,10 @@ document.getElementById("calculate").onclick = () => {
     const anomalyPct = parseFloat(document.getElementById("anomalyThreshold").value) || 15;
     const showHeat   = document.getElementById("showHeatmap").checked;
 
-    const res  = calculateVE(logData, veOld, mode, minSamples);
+    const anisotropyEl = document.getElementById("smartAnisotropy");
+    const anisotropy    = anisotropyEl ? parseFloat(anisotropyEl.value) : 0.5;
+
+    const res  = calculateVE(logData, veOld, mode, minSamples, { anisotropy, min: 40, max: 130 });
     lastResult = res;
 
     // Аномалии

@@ -1,6 +1,6 @@
 import { smartFill } from "./veSmartFill.js";
 
-export function calculateVE(log, veOld, mode="off", MIN_SAMPLES=3) {
+export function calculateVE(log, veOld, mode="off", MIN_SAMPLES=3, smartOptions={}) {
 
   const { rpmAxis, loadAxis } = veOld;
   const rows = veOld.rows;
@@ -60,7 +60,7 @@ export function calculateVE(log, veOld, mode="off", MIN_SAMPLES=3) {
   if (mode === "soft")   out = interpolateSoft(out, mask);
   if (mode === "hard")   out = smoothNTimes(out, 8);
   if (mode === "engine") out = engineInterpolation(out, mask);
-  if (mode === "smart")  out = smartFill(out, mask, veOld.values, rpmAxis, loadAxis);
+  if (mode === "smart")  out = smartFill(out, mask, veOld.values, rpmAxis, loadAxis, smartOptions);
 
   // Лёгкий smooth только если не smart (smart уже делает свой blend)
   if (mode !== "off" && mode !== "smart") out = smooth(out);
