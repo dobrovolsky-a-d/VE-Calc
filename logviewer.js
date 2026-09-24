@@ -338,8 +338,8 @@ function onParamChange(param, selected) {
 
 function renderAxisAssign() {
   overlayTip.textContent = state.files.length > 1
-    ? 'Цвет линии = файл, стиль (пунктир/точка) = параметр. Оси Y1/Y2 — для разных диапазонов значений. Разные заезды? Включи синхронизацию по RPM ниже.'
-    : 'Выбранные параметры строятся на одном графике. Используй оси Y1/Y2 для разных диапазонов.';
+    ? 'Цвет линии = файл, стиль (пунктир/точка) = параметр. Оси Y1/Y2 — для разных диапазонов, «Норм. 0–100%» — чтобы сравнить форму любого числа параметров разом. Разные заезды? Включи синхронизацию по RPM ниже.'
+    : 'Выбранные параметры строятся на одном графике. Y1/Y2 — для 2 разных диапазонов. «Норм. 0–100%» приводит любое число параметров к одной шкале по форме — удобно когда один из них (Duty Cycle, TPS) утыкается в ноль рядом с RPM.';
 
   axisAssignEl.innerHTML = '';
   state.selectedParams.forEach(param => {
@@ -353,10 +353,10 @@ function renderAxisAssign() {
     lbl.style.textOverflow = 'ellipsis';
 
     const sel = document.createElement('select');
-    ['y1', 'y2'].forEach(ax => {
+    ['y1', 'y2', 'norm'].forEach(ax => {
       const opt = document.createElement('option');
       opt.value = ax;
-      opt.textContent = ax === 'y1' ? 'Ось 1' : 'Ось 2';
+      opt.textContent = ax === 'y1' ? 'Ось 1' : (ax === 'y2' ? 'Ось 2' : 'Норм. 0–100%');
       if (state.axisAssign[param] === ax) opt.selected = true;
       sel.appendChild(opt);
     });
@@ -446,11 +446,34 @@ function getY(file, param) {
   });
 }
 
+// Нормализует значения параметра в 0–100% по его собственному min/max
+// (по ВСЕМ загруженным файлам сразу, чтобы разные заезды были сравнимы на одной шкале).
+// Решает проблему "плоских графиков внизу" — когда параметр с диапазоном 0-100%
+// (Duty Cycle, TPS) рисуется на одной шкале с RPM (0-6000) и утыкается в ноль.
+function getNormalizedY(file, param) {
+  const raw = getY(file, param);
+
+  let min = Infinity, max = -Infinity;
+  state.files.forEach(f => {
+    getY(f, param).forEach(v => {
+      if (v === null) return;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    });
+  });
+
+  if (!isFinite(min) || !isFinite(max) || max === min) {
+    return raw.map(() => 50); // плоская линия по центру, если данных нет или разброса нет
+  }
+
+  return raw.map(v => v === null ? null : ((v - min) / (max - min)) * 100);
+}
+
 function makeTrace(file, param, overrides = {}) {
-  const { xSource, ...restOverrides } = overrides;
+  const { xSource, ySource, ...restOverrides } = overrides;
   return {
     x: xSource === 'overlay' ? getOverlayX(file) : getTimeX(file),
-    y: getY(file, param),
+    y: ySource === 'normalized' ? getNormalizedY(file, param) : getY(file, param),
     mode: 'lines',
     name: state.files.length > 1 ? file.name : param,
     line: { color: file.color, width: 1.5 },
@@ -586,6 +609,8 @@ function buildOverlay() {
 
   const traces = [];
   let hasY2 = false;
+  let hasNorm = false;
+  let hasRawY1 = false;
 
   // Assign a stable dash-style per parameter (insertion order) so that,
   // when comparing multiple files, colour = file and dash = parameter —
@@ -598,6 +623,8 @@ function buildOverlay() {
     state.selectedParams.forEach(param => {
       const axis = state.axisAssign[param] || 'y1';
       if (axis === 'y2') hasY2 = true;
+      if (axis === 'norm') hasNorm = true;
+      if (axis === 'y1') hasRawY1 = true;
 
       const lineColor = multiFile ? file.color : paramColorInOverlay(param);
       const dash = multiFile ? dashForParam(param, paramList) : 'solid';
@@ -605,8 +632,11 @@ function buildOverlay() {
       traces.push(makeTrace(file, param, {
         name: multiFile ? `${file.name} · ${param}` : param,
         line: { color: lineColor, width: 1.5, dash },
-        yaxis: axis === 'y2' ? 'y2' : 'y',
-        hovertemplate: `%{y:.3f}<extra>${file.name} · ${param}</extra>`,
+        yaxis: axis === 'y2' ? 'y2' : 'y', // нормализованные тоже идут на ось 1 — они уже в общей шкале 0-100
+        ySource: axis === 'norm' ? 'normalized' : 'raw',
+        hovertemplate: axis === 'norm'
+          ? `%{y:.1f}% <extra>${file.name} · ${param} (норм.)</extra>`
+          : `%{y:.3f}<extra>${file.name} · ${param}</extra>`,
         xSource: 'overlay',
       }));
     });
@@ -628,7 +658,12 @@ function buildOverlay() {
     },
     yaxis: {
       ...PLOTLY_LAYOUT_BASE.yaxis,
-      title: { text: 'Ось 1', font: { size: 10 } },
+      title: {
+        text: hasNorm
+          ? (hasRawY1 ? 'Ось 1 (и норм. %)' : 'Норм. 0–100%')
+          : 'Ось 1',
+        font: { size: 10 }
+      },
     },
     ...(hasY2 ? {
       yaxis2: {
